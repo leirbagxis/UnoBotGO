@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -44,6 +45,12 @@ var ColorIcons = map[string]string{
 	Green:  "💚",
 	Yellow: "💛",
 	Black:  "⬛️",
+}
+
+var ValueIcons = map[string]string{
+	DrawTwo: "➕2",
+	Reverse: "🔄",
+	Skip:    "🚫",
 }
 
 type Card struct {
@@ -222,4 +229,50 @@ var StickersGrey = map[string]string{
 	"y_draw":       "CAADBAAD6w4AAgsJmVETUteFwqTVJgI",
 	"y_reverse":    "CAADBAADtg8AAqiFmFFwothyN9TrXwI",
 	"y_skip":       "CAADBAADSxEAAhcSmFGu_F5LffmsZgI",
+}
+
+var colorRank = map[string]int{
+	Red:    0,
+	Blue:   1,
+	Green:  2,
+	Yellow: 3,
+}
+
+var valueRank = map[string]int{
+	Zero:    0,
+	One:     1,
+	Two:     2,
+	Three:   3,
+	Four:    4,
+	Five:    5,
+	Six:     6,
+	Seven:   7,
+	Eight:   8,
+	Nine:    9,
+	DrawTwo: 10,
+	Reverse: 11,
+	Skip:    12,
+}
+
+func sortedCards(cards []*Card) []*Card {
+	sorted := make([]*Card, len(cards))
+	copy(sorted, cards)
+	sort.Slice(sorted, func(i, j int) bool {
+		a, b := sorted[i], sorted[j]
+		ar := colorRank[a.Color]
+		br := colorRank[b.Color]
+		if a.Special != "" {
+			ar = 99
+		}
+		if b.Special != "" {
+			br = 99
+		}
+		if ar != br {
+			return ar < br
+		}
+		av := valueRank[a.Value]
+		bv := valueRank[b.Value]
+		return av < bv
+	})
+	return sorted
 }

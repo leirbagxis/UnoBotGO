@@ -107,19 +107,55 @@ func addGameInfo(game *Game, results *[]telego.InlineQueryResult) {
 	})
 }
 
-func addChooseColor(game *Game, results *[]telego.InlineQueryResult) {
+func cardRepr(card *Card) string {
+	icon := ColorIcons[card.Color]
+	if icon == "" {
+		icon = ColorIcons[Black]
+	}
+	if card.Special == DrawFour {
+		return "+4 " + icon
+	} else if card.Special == Choose {
+		return "Colorchooser " + icon
+	} else if card.Value == DrawTwo {
+		return "Draw " + icon
+	} else if card.Value == Reverse {
+		return "Reverse " + icon
+	} else if card.Value == Skip {
+		return "Skip " + icon
+	}
+	return title(card.Value) + " " + icon
+}
+
+func addChooseColor(results *[]telego.InlineQueryResult) {
 	for _, color := range Colors {
-		label := colorName(color)
 		*results = append(*results, &telego.InlineQueryResultArticle{
-			Type:  "article",
-			ID:    color,
-			Title: "Escolher Cor",
-			Description: label,
+			Type:        "article",
+			ID:          color,
+			Title:       "Escolha sua cor",
+			Description: colorName(color),
 			InputMessageContent: &telego.InputTextMessageContent{
-				MessageText: fmt.Sprintf("%s %s", ColorIcons[color], label),
+				MessageText: colorName(color),
 			},
 		})
 	}
+}
+
+func addPlayerCards(game *Game, player *Player, results *[]telego.InlineQueryResult) {
+	if len(player.Cards) == 0 {
+		return
+	}
+	cardTitle := "Cartas (toque para estado do jogo):"
+	var descs []string
+	for _, c := range sortedCards(player.Cards) {
+		descs = append(descs, cardRepr(c))
+	}
+	*results = append(*results, &telego.InlineQueryResultArticle{
+		Type:        "article",
+		ID:          "hand",
+		Title:       cardTitle,
+		Description: strings.Join(descs, ", "),
+		InputMessageContent: gameInfo(game),
+	})
 }
 
 func addNoGame(results *[]telego.InlineQueryResult) {
@@ -205,7 +241,7 @@ func colorName(color string) string {
 func displayName(user *UserData) string {
 	name := user.FirstName
 	if user.Username != "" {
-		name += " (@@" + user.Username + ")"
+		name += " (@" + user.Username + ")"
 	}
 	return name
 }

@@ -91,14 +91,34 @@ func (p *Player) Draw() error {
 }
 
 func (p *Player) Play(card *Card) {
+	log.Printf("[Player.Play] Player %s is trying to play card: %s (hand size: %d)", p.User.FirstName, card.String(), len(p.Cards))
+	found := false
 	for i, c := range p.Cards {
+		log.Printf("[Player.Play] Comparing hand card [%d]: %s with played card: %s (Equal: %v)", i, c.String(), card.String(), c.Equal(card))
 		if c.Equal(card) {
-			log.Printf("Removing card %s at index %d (hand size: %d)", card, i, len(p.Cards))
+			log.Printf("[Player.Play] MATCH FOUND! Removing card %s at index %d (hand size before: %d)", card.String(), i, len(p.Cards))
 			p.Cards = append(p.Cards[:i], p.Cards[i+1:]...)
+			found = true
 			break
 		}
 	}
+	if !found {
+		log.Printf("[Player.Play] WARNING: Card %s NOT found in player's hand! Hand: %+v", card.String(), p.Cards)
+	}
 	p.Game.PlayCard(card)
+}
+
+func (p *Player) HasCard(resultID string) bool {
+	card := CardFromStr(resultID)
+	if card == nil {
+		return false
+	}
+	for _, c := range p.Cards {
+		if c.Equal(card) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Player) PlayableCards() []*Card {
@@ -137,28 +157,25 @@ func (p *Player) cardPlayable(card *Card) bool {
 		return false
 	}
 
-	if card.Color == last.Color || card.Value == last.Value {
-		if last.Value == DrawTwo && p.Game.DrawCounter > 0 && card.Value != DrawTwo {
-			log.Println("Player has to draw and can't counter")
-			return false
-		}
-		if last.Special == DrawFour && p.Game.DrawCounter > 0 {
-			log.Println("Player has to draw and can't counter")
-			return false
-		}
-		return true
+	if card.Color != last.Color && card.Value != last.Value && card.Special == "" {
+		log.Println("Card's color or value doesn't match")
+		return false
 	}
 
-	if card.Special != "" {
-		if last.Special == Choose || last.Special == DrawFour {
-			if card.Special == Choose || card.Special == DrawFour {
-				log.Println("Can't play colorchooser on another one")
-				return false
-			}
-		}
-		if card.Special == Choose || card.Special == DrawFour {
-			return true
-		}
+	if last.Value == DrawTwo && card.Value != DrawTwo && p.Game.DrawCounter > 0 {
+		log.Println("Player has to draw and can't counter")
+		return false
+	}
+
+	if last.Special == DrawFour && p.Game.DrawCounter > 0 {
+		log.Println("Player has to draw and can't counter")
+		return false
+	}
+
+	if (last.Special == Choose || last.Special == DrawFour) &&
+		(card.Special == Choose || card.Special == DrawFour) {
+		log.Println("Can't play colorchooser on another one")
+		return false
 	}
 
 	if last.Color == "" {
@@ -166,5 +183,5 @@ func (p *Player) cardPlayable(card *Card) bool {
 		return false
 	}
 
-	return false
+	return true
 }

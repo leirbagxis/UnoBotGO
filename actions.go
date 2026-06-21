@@ -9,8 +9,10 @@ import (
 )
 
 func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
+	log.Printf("[doPlayCard] resultID: %s, player: %s (cards in hand: %d)", resultID, player.User.FirstName, len(player.Cards))
 	card := CardFromStr(resultID)
 	if card == nil {
+		log.Printf("[doPlayCard] CardFromStr returned nil for resultID: %s", resultID)
 		return
 	}
 
@@ -32,8 +34,9 @@ func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
 
 		err := gm.LeaveGame(player.User, chatID)
 		if err == ErrNotEnoughPlayers {
+			game.Started = false
 			sendMessage(bot, chatID, "Jogo encerrado!")
-			gm.EndGame(chatID, player.User)
+			gm.EndGameByGame(chatID, game)
 		}
 	}
 }
@@ -79,10 +82,11 @@ func doSkip(bot *telego.Bot, player *Player) {
 	} else {
 		err := gm.LeaveGame(skippedPlayer.User, chatID)
 		if err == ErrNotEnoughPlayers {
+			game.Started = false
 			sendMessage(bot, chatID, fmt.Sprintf(
 				"%s ficou sem tempo e foi removido!\nJogo encerrado.",
 				displayName(skippedPlayer.User)))
-			gm.EndGame(chatID, skippedPlayer.User)
+			gm.EndGameByGame(chatID, game)
 		} else {
 			sendNextMessage(bot, chatID, fmt.Sprintf(
 				"%s ficou sem tempo e foi removido!\nPróximo jogador: %s",

@@ -31,8 +31,21 @@
 - Estado em memória (leve, sem dependências externas)
 - Long polling (sem necessidade de webhook para dev)
 - Stickers do projeto original (CARDS_CLASSIC_COLORBLIND)
+- Roteamento proativo do contexto de jogo ativo (UserIDCurrent) no início de turnos e interações em grupo, mantendo o inline query livre de parâmetros de chat expostos, com leituras de mapas globais sob Mutex e sufixo de anti-cheat nos IDs dos resultados inline para invalidar o cache do Telegram de forma nativa e idêntica ao repositório original. Suporte a inversão de rotação de turnos (Reversed) no Game e redução do escopo de Mutex em inline handlers para evitar deadlocks de concorrência.
 
 ## Problemas conhecidos
 - Stickers podem não funcionar se o pacote de stickers original for alterado
 - Modo de jogo "text" não implementado completamente (sempre usa stickers)
 - Bot precisa de `/setinline` e `/setinlinefeedback` no BotFather
+
+## Histórico de correções (21/06/2026)
+- **Cache:** `CacheTime = 1` em vez de 0 — telego usa `omitempty` que omite 0 do JSON; Telegram default 300s.
+- **Anti-cheat:** Result IDs com timestamp `time.Now().UnixNano()` para invalidar cache do cliente.
+- **Parsing anti-cheat:** Aceita formato 2 ou 3 partes (`<id>:<anticheat>` ou `<id>:<timestamp>:<anticheat>`).
+- **Regras de cartas:** `cardPlayable` reescrita igual ao Python original (bloqueia +4 em +2 c/ draw_counter > 0, special-on-special, etc).
+- **EndGame:** Adicionado `EndGameByGame` para encerrar quando jogador já saiu. `game.Started = false` setado antes de `afterAction`.
+- **Notificação anti-cheat:** Mensagem enviada ao jogador se ação expirou.
+- **Ordenação:** Cartas no inline agora ordenadas por cor (r, b, g, y) e valor.
+- **Seletor de cores:** Sem duplicação de emoji; `Title` mostra nome da cor.
+- **displayName:** `@@` corrigido para `@`.
+- **Cores da mão:** Mostra emojis das cores disponíveis durante escolha de cor.

@@ -40,10 +40,19 @@ func (g *Game) Players() []*Player {
 	var players []*Player
 	current := g.CurrentPlayer
 	players = append(players, current)
-	it := current.Next
+	var it *Player
+	if g.Reversed {
+		it = current.Prev
+	} else {
+		it = current.Next
+	}
 	for it != nil && it != current {
 		players = append(players, it)
-		it = it.Next
+		if g.Reversed {
+			it = it.Prev
+		} else {
+			it = it.Next
+		}
 	}
 	return players
 }
@@ -95,7 +104,11 @@ func (g *Game) Reverse() {
 
 func (g *Game) Turn() {
 	log.Println("Next Player")
-	g.CurrentPlayer = g.CurrentPlayer.Next
+	if g.Reversed {
+		g.CurrentPlayer = g.CurrentPlayer.Prev
+	} else {
+		g.CurrentPlayer = g.CurrentPlayer.Next
+	}
 	g.CurrentPlayer.Drew = false
 	g.CurrentPlayer.TurnStarted = time.Now()
 	g.ChoosingColor = false

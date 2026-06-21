@@ -21,6 +21,17 @@ func handleMessage(bot *telego.Bot, message telego.Message) {
 		Username:  message.From.Username,
 	}
 
+	gm.Lock()
+	if players, ok := gm.UserIDPlayers[user.ID]; ok {
+		for _, p := range players {
+			if p.Game.ChatID == chatID {
+				gm.UserIDCurrent[user.ID] = p
+				break
+			}
+		}
+	}
+	gm.Unlock()
+
 	if !strings.HasPrefix(text, "/") {
 		return
 	}
@@ -127,6 +138,7 @@ func cmdStartGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID in
 	}
 
 	game.Start()
+	gm.UpdateCurrentPlayer(game)
 	for _, player := range game.Players() {
 		player.DrawFirstHand()
 	}
@@ -154,6 +166,7 @@ func cmdLeaveGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID in
 	switch err {
 	case nil:
 		if game.Started {
+			gm.UpdateCurrentPlayer(game)
 			sendNextMessage(bot, chatID, fmt.Sprintf("OK. Próximo jogador: %s", displayName(game.CurrentPlayer.User)))
 		} else {
 			sendMessage(bot, chatID, fmt.Sprintf("%s saiu do jogo.", displayName(user)))
@@ -161,7 +174,8 @@ func cmdLeaveGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID in
 	case ErrNoGameInChat:
 		sendMessage(bot, chatID, "Você não está em nenhum jogo neste grupo.")
 	case ErrNotEnoughPlayers:
-		gm.EndGame(chatID, user)
+		game.Started = false
+		gm.EndGameByGame(chatID, game)
 		sendMessage(bot, chatID, "Jogo encerrado!")
 	default:
 		log.Printf("Error leaving game: %v", err)
@@ -190,6 +204,7 @@ func cmdKillGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int
 	if err != nil {
 		sendMessage(bot, chatID, "O jogo ainda não foi iniciado. Use /entrar e /start")
 	} else {
+		game.Started = false
 		sendMessage(bot, chatID, "Jogo encerrado!")
 	}
 }
@@ -291,7 +306,11 @@ func cmdKickPlayer(bot *telego.Bot, msg telego.Message, user *UserData, chatID i
 
 	err := gm.LeaveGame(kicked, chatID)
 	if err == ErrNotEnoughPlayers {
-		gm.EndGame(chatID, kicked)
+		kickedPlayer := gm.PlayerForUserInChat(kicked, chatID)
+		if kickedPlayer != nil {
+			kickedPlayer.Game.Started = false
+			gm.EndGameByGame(chatID, kickedPlayer.Game)
+		}
 		sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayName(kicked), displayName(user)))
 		sendMessage(bot, chatID, "Jogo encerrado!")
 		return
@@ -327,27 +346,16 @@ func cmdCleanGames(bot *telego.Bot, msg telego.Message, user *UserData, chatID i
 		return
 	}
 
-	gm.Lock()
-	var remaining []*Game
-	removed := 0
-	for _, g := range gm.ChatIDGames[chatID] {
-		if !g.Started {
-			removed++
-		} else {
-			remaining = append(remaining, g)
-		}
+	removed, err := gm.CleanGames(chatID)
+	if err != nil {
+		log.Printf("Error cleaning games: %v", err)
+		return
 	}
+
 	if removed == 0 {
-		gm.Unlock()
 		sendMessage(bot, chatID, "Nenhum jogo não iniciado para limpar.")
 		return
 	}
-	if len(remaining) == 0 {
-		delete(gm.ChatIDGames, chatID)
-	} else {
-		gm.ChatIDGames[chatID] = remaining
-	}
-	gm.Unlock()
 
 	sendMessage(bot, chatID, fmt.Sprintf("Limpou %d jogo(s) não iniciado(s).", removed))
 }

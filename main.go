@@ -8,18 +8,20 @@ import (
 	"github.com/mymmrac/telego"
 )
 
+var botToken string
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Arquivo .env não encontrado, usando variáveis de ambiente")
 	}
 
-	token := os.Getenv("TOKEN")
-	if token == "" {
+	botToken = os.Getenv("TOKEN")
+	if botToken == "" {
 		log.Fatal("TOKEN environment variable is required")
 	}
 
-	bot, err := telego.NewBot(token, telego.WithDefaultDebugLogger())
+	bot, err := telego.NewBot(botToken, telego.WithDefaultDebugLogger())
 	if err != nil {
 		log.Fatalf("Failed to create bot: %v", err)
 	}

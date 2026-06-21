@@ -138,16 +138,7 @@ func (gm *GameManager) leaveGame(user *UserData, chatID int64) error {
 	return nil
 }
 
-func (gm *GameManager) EndGame(chatID int64, user *UserData) error {
-	gm.Lock()
-	defer gm.Unlock()
-
-	player := gm.playerForUserInChat(user, chatID)
-	if player == nil {
-		return ErrNoGameInChat
-	}
-	game := player.Game
-
+func (gm *GameManager) removeGamePlayers(game *Game) {
 	for _, p := range game.Players() {
 		userPlayers := gm.UserIDPlayers[p.User.ID]
 		for i, up := range userPlayers {
@@ -163,6 +154,28 @@ func (gm *GameManager) EndGame(chatID int64, user *UserData) error {
 			delete(gm.UserIDCurrent, p.User.ID)
 		}
 	}
+}
+
+func (gm *GameManager) EndGame(chatID int64, user *UserData) error {
+	gm.Lock()
+	defer gm.Unlock()
+
+	player := gm.playerForUserInChat(user, chatID)
+	if player == nil {
+		return ErrNoGameInChat
+	}
+	return gm.endGame(chatID, player.Game)
+}
+
+func (gm *GameManager) EndGameByGame(chatID int64, game *Game) {
+	gm.Lock()
+	defer gm.Unlock()
+	gm.endGame(chatID, game)
+}
+
+func (gm *GameManager) endGame(chatID int64, game *Game) error {
+	game.Started = false
+	gm.removeGamePlayers(game)
 
 	games := gm.ChatIDGames[chatID]
 	for i, g := range games {
@@ -176,6 +189,57 @@ func (gm *GameManager) EndGame(chatID int64, user *UserData) error {
 	}
 
 	return nil
+}
+
+func (gm *GameManager) CleanGames(chatID int64) (int, error) {
+	gm.Lock()
+	defer gm.Unlock()
+
+	games := gm.ChatIDGames[chatID]
+	if len(games) == 0 {
+		return 0, nil
+	}
+
+	var remaining []*Game
+	removed := 0
+	for _, g := range games {
+		if !g.Started {
+			gm.removeGamePlayers(g)
+			removed++
+		} else {
+			remaining = append(remaining, g)
+		}
+	}
+
+	if removed > 0 {
+		if len(remaining) == 0 {
+			delete(gm.ChatIDGames, chatID)
+		} else {
+			gm.ChatIDGames[chatID] = remaining
+		}
+	}
+
+	return removed, nil
+}
+
+func (gm *GameManager) UpdateCurrentPlayer(game *Game) {
+	gm.Lock()
+	defer gm.Unlock()
+	if game.CurrentPlayer != nil {
+		gm.UserIDCurrent[game.CurrentPlayer.User.ID] = game.CurrentPlayer
+	}
+}
+
+func (gm *GameManager) GetCurrentPlayer(userID int64) *Player {
+	gm.Lock()
+	defer gm.Unlock()
+	return gm.UserIDCurrent[userID]
+}
+
+func (gm *GameManager) GetPlayersForUser(userID int64) []*Player {
+	gm.Lock()
+	defer gm.Unlock()
+	return gm.UserIDPlayers[userID]
 }
 
 func (gm *GameManager) PlayerForUserInChat(user *UserData, chatID int64) *Player {
