@@ -249,25 +249,40 @@ afterAction:
 }
 
 func startPlayerCountdown(bot *telego.Bot, game *Game) {
-	player := game.CurrentPlayer
-	waitSec := player.WaitingTime
-
-	if waitSec < GetMinFastTurnTime() {
-		waitSec = GetMinFastTurnTime()
+	if game.Mode != "fast" {
+		return
 	}
 
-	if game.Mode == "fast" {
-		go func() {
-			time.Sleep(time.Duration(waitSec) * time.Second)
+	minTime := GetMinFastTurnTime()
+
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
 			game.Lock()
-			defer game.Unlock()
-			if game.Started && game.CurrentPlayer == player {
-				doSkip(bot, player)
-				if game.Started && game.CurrentPlayer != nil {
-					nextMsg := fmt.Sprintf("Próximo jogador: %s", displayName(game.CurrentPlayer.User))
-					sendMessage(bot, game.ChatID, nextMsg)
-				}
+			if !game.Started {
+				game.Unlock()
+				return
 			}
-		}()
-	}
+
+			player := game.CurrentPlayer
+			delta := int(time.Since(player.TurnStarted).Seconds())
+
+			wait := player.WaitingTime
+			if wait < 0 {
+				wait = 0
+			}
+			if wait > 0 && wait < minTime {
+				wait = minTime
+			}
+
+			if delta >= wait {
+				game.Unlock()
+				doSkip(bot, player)
+			} else {
+				game.Unlock()
+			}
+		}
+	}()
 }

@@ -71,6 +71,12 @@ func handleMessage(bot *telego.Bot, message telego.Message) {
 		cmdHelp(bot, message, chatID)
 	case "/modos":
 		cmdModes(bot, message, chatID)
+	case "/ranking":
+		cmdRanking(bot, message, chatID)
+	case "/diario":
+		cmdRankingDiario(bot, message, chatID)
+	case "/semanal":
+		cmdRankingSemanal(bot, message, chatID)
 	}
 }
 
@@ -394,7 +400,10 @@ Comandos:
 /limpar - Limpar jogos não iniciados
 /notificar - Notificar quando novo jogo começar
 /ajuda - Esta ajuda
-/modos - Explicação dos modos de jogo`
+/modos - Explicação dos modos de jogo
+/ranking - Ranking mensal
+/diario - Ranking diário
+/semanal - Ranking semanal`
 
 	sendMessage(bot, chatID, helpText)
 }
@@ -409,6 +418,158 @@ func cmdModes(bot *telego.Bot, msg telego.Message, chatID int64) {
 
 O criador do jogo pode mudar o modo digitando @ na janela.`
 	sendMessage(bot, chatID, modesText)
+}
+
+func cmdRanking(bot *telego.Bot, msg telego.Message, chatID int64) {
+	ranking := rankingStore.GetRanking(chatID, "mensal")
+	text := formatRankingTexto("Mensal", ranking)
+
+	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
+		ChatID: telego.ChatID{ID: chatID},
+		Text:   text,
+		ReplyParameters: &telego.ReplyParameters{
+			MessageID: msg.MessageID,
+		},
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{
+					{Text: "📅 Diário", CallbackData: "ranking_diario"},
+					{Text: "📆 Semanal", CallbackData: "ranking_semanal"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao enviar ranking: %v", err)
+	}
+}
+
+func cmdRankingDiario(bot *telego.Bot, msg telego.Message, chatID int64) {
+	ranking := rankingStore.GetRanking(chatID, "diario")
+	text := formatRankingTexto("Diário", ranking)
+
+	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
+		ChatID: telego.ChatID{ID: chatID},
+		Text:   text,
+		ReplyParameters: &telego.ReplyParameters{
+			MessageID: msg.MessageID,
+		},
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{
+					{Text: "📅 Mensal", CallbackData: "ranking_mensal"},
+					{Text: "📆 Semanal", CallbackData: "ranking_semanal"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao enviar ranking: %v", err)
+	}
+}
+
+func cmdRankingSemanal(bot *telego.Bot, msg telego.Message, chatID int64) {
+	ranking := rankingStore.GetRanking(chatID, "semanal")
+	text := formatRankingTexto("Semanal", ranking)
+
+	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
+		ChatID: telego.ChatID{ID: chatID},
+		Text:   text,
+		ReplyParameters: &telego.ReplyParameters{
+			MessageID: msg.MessageID,
+		},
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{
+					{Text: "📅 Diário", CallbackData: "ranking_diario"},
+					{Text: "📆 Mensal", CallbackData: "ranking_mensal"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao enviar ranking: %v", err)
+	}
+}
+
+func handleCallbackQuery(bot *telego.Bot, query telego.CallbackQuery) {
+	chatID := query.Message.GetChat().ID
+	messageID := query.Message.GetMessageID()
+
+	var periodo, periodoLabel string
+	switch query.Data {
+	case "ranking_diario":
+		periodo = "diario"
+		periodoLabel = "Diário"
+	case "ranking_semanal":
+		periodo = "semanal"
+		periodoLabel = "Semanal"
+	case "ranking_mensal":
+		periodo = "mensal"
+		periodoLabel = "Mensal"
+	default:
+		return
+	}
+
+	ranking := rankingStore.GetRanking(chatID, periodo)
+	text := formatRankingTexto(periodoLabel, ranking)
+
+	var botoes [][]telego.InlineKeyboardButton
+	switch periodo {
+	case "diario":
+		botoes = [][]telego.InlineKeyboardButton{
+			{
+				{Text: "📅 Mensal", CallbackData: "ranking_mensal"},
+				{Text: "📆 Semanal", CallbackData: "ranking_semanal"},
+			},
+		}
+	case "semanal":
+		botoes = [][]telego.InlineKeyboardButton{
+			{
+				{Text: "📅 Diário", CallbackData: "ranking_diario"},
+				{Text: "📆 Mensal", CallbackData: "ranking_mensal"},
+			},
+		}
+	default:
+		botoes = [][]telego.InlineKeyboardButton{
+			{
+				{Text: "📅 Diário", CallbackData: "ranking_diario"},
+				{Text: "📆 Semanal", CallbackData: "ranking_semanal"},
+			},
+		}
+	}
+
+	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		MessageID: messageID,
+		Text:      text,
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: botoes,
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao editar mensagem de ranking: %v", err)
+	}
+
+	_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	})
+}
+
+func formatRankingTexto(periodo string, ranking []WinCount) string {
+	if len(ranking) == 0 {
+		return fmt.Sprintf("🏆 Ranking %s\n\nNenhuma vitória registrada neste período.", periodo)
+	}
+
+	text := fmt.Sprintf("🏆 Ranking %s\n\n", periodo)
+	for i, r := range ranking {
+		nome := r.FirstName
+		if r.Username != "" {
+			nome = "@" + r.Username
+		}
+		text += fmt.Sprintf("%d. %s — %d vitórias\n", i+1, nome, r.Wins)
+	}
+	return text
 }
 
 func isAdmin(userID int64) bool {

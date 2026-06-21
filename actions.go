@@ -31,6 +31,7 @@ func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
 	if len(player.Cards) == 0 {
 		sendMessage(bot, chatID, fmt.Sprintf("%s venceu!", player.User.FirstName))
 		game.PlayersWon++
+		rankingStore.RecordWin(player.User, chatID)
 
 		err := gm.LeaveGame(player.User, chatID)
 		if err == ErrNotEnoughPlayers {

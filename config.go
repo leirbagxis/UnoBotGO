@@ -42,6 +42,10 @@ func GetDefaultGamemode() string {
 	return getEnvStr("DEFAULT_GAMEMODE", "fast")
 }
 
+func GetDatabaseURL() string {
+	return getEnvStr("DATABASE_URL", "postgres://malbs@localhost:5432/unobot?sslmode=disable")
+}
+
 func getEnvInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
