@@ -22,6 +22,7 @@ type rawAnswerInlineQuery struct {
 	Results       []telego.InlineQueryResult `json:"results"`
 	CacheTime     int                       `json:"cache_time"`
 	IsPersonal    bool                      `json:"is_personal,omitempty"`
+	NextOffset    string                    `json:"next_offset"`
 }
 
 func sendAnswerInlineQuery(bot *telego.Bot, params rawAnswerInlineQuery) error {
@@ -63,6 +64,7 @@ func handleInlineQuery(bot *telego.Bot, query telego.InlineQuery) {
 				addModeFast(&results)
 				addModeWild(&results)
 				addModeText(&results)
+				addModeCaseiro(&results)
 			} else {
 				addNotStarted(&results)
 			}
@@ -116,6 +118,7 @@ func handleInlineQuery(bot *telego.Bot, query telego.InlineQuery) {
 		Results:       results,
 		CacheTime:     0,
 		IsPersonal:    true,
+		NextOffset:    "",
 	}
 
 	err := sendAnswerInlineQuery(bot, params)
@@ -174,6 +177,11 @@ func handleChosenInlineResult(bot *telego.Bot, result telego.ChosenInlineResult)
 	case resultID == "mode_text":
 		game.SetMode("text")
 		sendMessage(bot, game.ChatID, "Modo alterado para Text ✍️")
+		game.Unlock()
+		return
+	case resultID == "mode_caseiro":
+		game.SetMode("caseiro")
+		sendMessage(bot, game.ChatID, "Modo alterado para Caseiro 🏠")
 		game.Unlock()
 		return
 	default:

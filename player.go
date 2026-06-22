@@ -145,14 +145,22 @@ func (p *Player) cardPlayable(card *Card) bool {
 		return false
 	}
 
-	if last.Value == DrawTwo && card.Value != DrawTwo && p.Game.DrawCounter > 0 {
-		log.Println("Player has to draw and can't counter")
-		return false
+	if last.Value == DrawTwo && p.Game.DrawCounter > 0 {
+		if p.Game.Mode == "caseiro" && card.Special == DrawFour {
+			// caseiro: +4 pode rebater +2
+		} else if card.Value != DrawTwo {
+			log.Println("Player has to draw and can't counter")
+			return false
+		}
 	}
 
 	if last.Special == DrawFour && p.Game.DrawCounter > 0 {
-		log.Println("Player has to draw and can't counter")
-		return false
+		if p.Game.Mode == "caseiro" && card.Value == DrawTwo && card.Color == last.Color {
+			// caseiro: +2 da cor escolhida pode ser jogado
+		} else {
+			log.Println("Player has to draw and can't counter")
+			return false
+		}
 	}
 
 	if (last.Special == Choose || last.Special == DrawFour) &&

@@ -63,6 +63,7 @@ func main() {
 			{Command: "limpar", Description: "Limpar jogos não iniciados"},
 			{Command: "notificar", Description: "Notificar quando novo jogo começar"},
 			{Command: "ajuda", Description: "Ajuda"},
+			{Command: "modos", Description: "Explicação dos modos de jogo"},
 			{Command: "ranking", Description: "Ranking mensal"},
 			{Command: "diario", Description: "Ranking diário"},
 			{Command: "semanal", Description: "Ranking semanal"},

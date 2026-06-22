@@ -77,6 +77,8 @@ func handleMessage(bot *telego.Bot, message telego.Message) {
 		cmdRankingSemanal(bot, message, chatID)
 	case "/desafio":
 		cmdDesafio(bot, message, user, chatID)
+	case "/modos":
+		cmdModes(bot, message, chatID)
 	case "/rankingx1":
 		cmdRankingX1(bot, message, user, chatID)
 	}
@@ -420,11 +422,25 @@ Comandos:
 /limpar - Limpar jogos não iniciados
 /notificar - Notificar quando novo jogo começar
 /ajuda - Esta ajuda
+/modos - Modos de jogo
 /desafio - Desafiar alguém para um MD1/MD3/MD5
 /ranking - Ranking mensal
 /diario - Ranking diário
 /semanal - Ranking semanal`
 	sendMessage(bot, chatID, helpText)
+}
+
+func cmdModes(bot *telego.Bot, msg telego.Message, chatID int64) {
+	text := `<b>🎮 Modos de jogo:</b>
+
+🎻 <b>Classic</b> — UNO padrão. Sem auto-skip.
+🚀 <b>Sanic</b> — UNO padrão. Jogador que demora é pulado automaticamente.
+🐉 <b>Wild</b> — Mais cartas especiais (+4 e Choose), menos números.
+✍️ <b>Text</b> — UNO padrão. Apenas texto, sem stickers.
+🏠 <b>Caseiro</b> — +2 pode ser rebatido por +4; após +4 só +2 da cor escolhida.
+
+O criador do jogo pode mudar o modo digitando @ no grupo antes de iniciar.`
+	sendMessage(bot, chatID, text)
 }
 
 func cmdRanking(bot *telego.Bot, msg telego.Message, chatID int64) {

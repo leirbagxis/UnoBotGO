@@ -184,9 +184,10 @@ func addNotStarted(results *[]telego.InlineQueryResult) {
 
 func addModeClassic(results *[]telego.InlineQueryResult) {
 	*results = append(*results, &telego.InlineQueryResultArticle{
-		Type:  "article",
-		ID:    "mode_classic",
-		Title: "🎻 Modo Classic",
+		Type:        "article",
+		ID:          "mode_classic",
+		Title:       "📋 Escolha o modo de jogo",
+		Description: "🎻 Classic",
 		InputMessageContent: &telego.InputTextMessageContent{
 			MessageText: "Classic 🎻",
 		},
@@ -195,9 +196,10 @@ func addModeClassic(results *[]telego.InlineQueryResult) {
 
 func addModeFast(results *[]telego.InlineQueryResult) {
 	*results = append(*results, &telego.InlineQueryResultArticle{
-		Type:  "article",
-		ID:    "mode_fast",
-		Title: "🚀 Modo Sanic",
+		Type:        "article",
+		ID:          "mode_fast",
+		Title:       "📋 Escolha o modo de jogo",
+		Description: "🚀 Sanic",
 		InputMessageContent: &telego.InputTextMessageContent{
 			MessageText: "Gotta go fast! 🚀",
 		},
@@ -206,9 +208,10 @@ func addModeFast(results *[]telego.InlineQueryResult) {
 
 func addModeWild(results *[]telego.InlineQueryResult) {
 	*results = append(*results, &telego.InlineQueryResultArticle{
-		Type:  "article",
-		ID:    "mode_wild",
-		Title: "🐉 Modo Wild",
+		Type:        "article",
+		ID:          "mode_wild",
+		Title:       "📋 Escolha o modo de jogo",
+		Description: "🐉 Wild",
 		InputMessageContent: &telego.InputTextMessageContent{
 			MessageText: "Into the Wild~ 🐉",
 		},
@@ -217,11 +220,24 @@ func addModeWild(results *[]telego.InlineQueryResult) {
 
 func addModeText(results *[]telego.InlineQueryResult) {
 	*results = append(*results, &telego.InlineQueryResultArticle{
-		Type:  "article",
-		ID:    "mode_text",
-		Title: "✍️ Modo Text",
+		Type:        "article",
+		ID:          "mode_text",
+		Title:       "📋 Escolha o modo de jogo",
+		Description: "✍️ Text",
 		InputMessageContent: &telego.InputTextMessageContent{
 			MessageText: "Text ✍️",
+		},
+	})
+}
+
+func addModeCaseiro(results *[]telego.InlineQueryResult) {
+	*results = append(*results, &telego.InlineQueryResultArticle{
+		Type:        "article",
+		ID:          "mode_caseiro",
+		Title:       "📋 Escolha o modo de jogo",
+		Description: "🏠 Caseiro",
+		InputMessageContent: &telego.InputTextMessageContent{
+			MessageText: "Caseiro 🏠",
 		},
 	})
 }

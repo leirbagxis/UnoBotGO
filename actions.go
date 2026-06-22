@@ -31,7 +31,7 @@ func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
 			ParseMode: telego.ModeHTML,
 		})
 		if err == nil {
-			reactMessage(bot, chatID, msg.MessageID, "😱")
+			reactMessage(bot, chatID, msg.MessageID, "📢")
 		}
 	}
 
@@ -119,21 +119,23 @@ func doCallBluff(bot *telego.Bot, player *Player) {
 	prevPlayer := player.Prev
 
 	if prevPlayer.Bluffing {
-		sendMessage(bot, chatID, fmt.Sprintf(
-			"Blefe pego! Dando 4 cartas para %s", prevPlayer.User.FirstName))
+		n := game.DrawCounter
 		err := prevPlayer.Draw()
 		if err != nil {
 			sendMessage(bot, chatID, "Não há mais cartas no baralho.")
 		}
+		sendMessage(bot, chatID, fmt.Sprintf(
+			"Blefe pego! %s recebeu %d cartas!", prevPlayer.User.FirstName, n))
 	} else {
 		game.DrawCounter += 2
-		sendMessage(bot, chatID, fmt.Sprintf(
-			"%s não blefou! Dando 6 cartas para %s",
-			prevPlayer.User.FirstName, player.User.FirstName))
+		n := game.DrawCounter
 		err := player.Draw()
 		if err != nil {
 			sendMessage(bot, chatID, "Não há mais cartas no baralho.")
 		}
+		sendMessage(bot, chatID, fmt.Sprintf(
+			"%s não blefou! %s recebeu %d cartas!",
+			prevPlayer.User.FirstName, player.User.FirstName, n))
 	}
 
 	game.Turn()
