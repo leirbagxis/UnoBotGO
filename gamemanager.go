@@ -35,8 +35,8 @@ func (gm *GameManager) NewGame(chatID int64) *Game {
 	gm.Lock()
 	defer gm.Unlock()
 
-	if gm.ChatIDMatch[chatID] != nil {
-		log.Printf("Blocked NewGame: chat %d has active match", chatID)
+	if m := gm.ChatIDMatch[chatID]; m != nil && m.State != MatchWaiting {
+		log.Printf("Blocked NewGame: chat %d has active match in state %d", chatID, m.State)
 		return nil
 	}
 

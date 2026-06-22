@@ -95,12 +95,12 @@ func cmdNewGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int6
 		sendMessage(bot, chatID, "Já existe um desafio ativo neste grupo!")
 		return
 	}
-	if game.Starter != nil {
-		sendMessage(bot, chatID, "Já existe um jogo neste grupo!")
+	if game.Started {
+		sendMessage(bot, chatID, "Já existe um jogo em andamento neste grupo!")
 		return
 	}
 	game.Starter = user
-	game.Owner = append(game.Owner, user.ID)
+	game.Owner = []int64{user.ID}
 
 	sendMessage(bot, chatID, "Novo jogo criado! Entre com /entrar e inicie com /start")
 }
@@ -403,18 +403,19 @@ func cmdCleanGames(bot *telego.Bot, msg telego.Message, user *UserData, chatID i
 		return
 	}
 
+	match := gm.GetMatch(chatID)
+	if match != nil {
+		gm.CancelMatch(chatID)
+		sendMessage(bot, chatID, "Desafio cancelado!")
+		return
+	}
+
 	gm.Lock()
 	games := gm.ChatIDGames[chatID]
 	gm.Unlock()
 
 	if len(games) == 0 {
 		sendMessage(bot, chatID, "Nenhum jogo para limpar.")
-		return
-	}
-
-	last := games[len(games)-1]
-	if last.Starter != nil && user.ID != last.Starter.ID && !isAdmin(user.ID) {
-		sendMessage(bot, chatID, "Apenas o criador do jogo pode fazer isso.")
 		return
 	}
 
