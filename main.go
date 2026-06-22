@@ -65,6 +65,8 @@ func main() {
 			{Command: "ranking", Description: "Ranking mensal"},
 			{Command: "diario", Description: "Ranking diário"},
 			{Command: "semanal", Description: "Ranking semanal"},
+			{Command: "desafio", Description: "Desafiar alguém para um MD1/MD3/MD5"},
+			{Command: "rankingx1", Description: "Confrontos do ranking de desafios"},
 		},
 	})
 	if err != nil {

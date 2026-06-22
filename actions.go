@@ -25,12 +25,23 @@ func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
 	}
 
 	if len(player.Cards) == 1 {
-		sendMessage(bot, chatID, "UNO!")
+		msgID := sendMessage(bot, chatID, "UNO!")
+		reactMessage(bot, chatID, msgID, "😱")
 	}
 
 	if len(player.Cards) == 0 {
-		sendMessage(bot, chatID, fmt.Sprintf("%s venceu!", player.User.FirstName))
+		msgID := sendMessage(bot, chatID, fmt.Sprintf("%s venceu!", player.User.FirstName))
+		reactMessage(bot, chatID, msgID, "🎉")
 		game.PlayersWon++
+
+		if game.MatchID != 0 {
+			match := gm.GetMatch(chatID)
+			if match != nil {
+				gm.endMatchGame(bot, match, player)
+			}
+			return
+		}
+
 		rankingStore.RecordWin(player.User, chatID)
 
 		err := gm.LeaveGame(player.User, chatID)
@@ -63,7 +74,6 @@ func doSkip(bot *telego.Bot, player *Player) {
 	nextPlayer := game.CurrentPlayer.Next
 
 	if skippedPlayer.WaitingTime > 0 {
-		skippedPlayer.AntiCheat++
 		skippedPlayer.WaitingTime -= GetTimeRemovalAfterSkip()
 		if skippedPlayer.WaitingTime < 0 {
 			skippedPlayer.WaitingTime = 0
@@ -123,13 +133,34 @@ func doCallBluff(bot *telego.Bot, player *Player) {
 	game.Turn()
 }
 
-func sendMessage(bot *telego.Bot, chatID int64, text string) {
-	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
+func sendMessage(bot *telego.Bot, chatID int64, text string) int {
+	msg, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
 		ChatID: telego.ChatID{ID: chatID},
 		Text:   text,
 	})
 	if err != nil {
 		log.Printf("Error sending message: %v", err)
+		return 0
+	}
+	return msg.MessageID
+}
+
+func reactMessage(bot *telego.Bot, chatID int64, messageID int, emoji string) {
+	if messageID == 0 {
+		return
+	}
+	err := bot.SetMessageReaction(botCtx, &telego.SetMessageReactionParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		MessageID: messageID,
+		Reaction: []telego.ReactionType{
+			&telego.ReactionTypeEmoji{
+				Type:  telego.ReactionEmoji,
+				Emoji: emoji,
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Error setting reaction: %v", err)
 	}
 }
 

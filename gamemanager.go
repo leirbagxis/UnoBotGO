@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"sync"
+
+	"github.com/mymmrac/telego"
 )
 
 type GameManager struct {
@@ -11,6 +14,8 @@ type GameManager struct {
 	UserIDPlayers map[int64][]*Player
 	UserIDCurrent map[int64]*Player
 	RemindDict    map[int64]map[int64]bool
+	ChatIDMatch   map[int64]*Match
+	nextMatchID   int64
 }
 
 func NewGameManager() *GameManager {
@@ -19,6 +24,7 @@ func NewGameManager() *GameManager {
 		UserIDPlayers: make(map[int64][]*Player),
 		UserIDCurrent: make(map[int64]*Player),
 		RemindDict:    make(map[int64]map[int64]bool),
+		ChatIDMatch:   make(map[int64]*Match),
 	}
 }
 
@@ -28,6 +34,11 @@ func (gm *GameManager) Unlock() { gm.mu.Unlock() }
 func (gm *GameManager) NewGame(chatID int64) *Game {
 	gm.Lock()
 	defer gm.Unlock()
+
+	if gm.ChatIDMatch[chatID] != nil {
+		log.Printf("Blocked NewGame: chat %d has active match", chatID)
+		return nil
+	}
 
 	if games, ok := gm.ChatIDGames[chatID]; ok && len(games) > 0 {
 		last := games[len(games)-1]
@@ -189,6 +200,146 @@ func (gm *GameManager) endGame(chatID int64, game *Game) error {
 	}
 
 	return nil
+}
+
+func (gm *GameManager) NewMatch(chatID int64, challenger *UserData) *Match {
+	gm.Lock()
+	defer gm.Unlock()
+
+	if gm.ChatIDMatch[chatID] != nil {
+		return nil
+	}
+	games := gm.ChatIDGames[chatID]
+	if len(games) > 0 && games[len(games)-1].Started {
+		return nil
+	}
+
+	gm.nextMatchID++
+	match := &Match{
+		ID:         gm.nextMatchID,
+		Challenger: challenger,
+		ChatID:     chatID,
+		BestOf:     3,
+		TargetWins: 2,
+		State:      MatchWaiting,
+	}
+	gm.ChatIDMatch[chatID] = match
+	return match
+}
+
+func (gm *GameManager) GetMatch(chatID int64) *Match {
+	gm.Lock()
+	defer gm.Unlock()
+	return gm.ChatIDMatch[chatID]
+}
+
+func (gm *GameManager) CancelMatch(chatID int64) {
+	gm.Lock()
+	defer gm.Unlock()
+	delete(gm.ChatIDMatch, chatID)
+}
+
+func (gm *GameManager) startMatchGame(bot *telego.Bot, match *Match) {
+	gm.Lock()
+
+	game := NewGame(match.ChatID)
+	game.MatchID = match.ID
+
+	u1 := match.Challenger
+	u2 := match.Challenged
+
+	p1 := NewPlayer(game, u1)
+	p2 := NewPlayer(game, u2)
+
+	game.Deck.FillClassic()
+	game.firstCard()
+	game.Started = true
+
+	err1 := p1.DrawFirstHand()
+	err2 := p2.DrawFirstHand()
+	if err1 != nil || err2 != nil {
+		log.Printf("Erro ao distribuir cartas no match: %v, %v", err1, err2)
+		gm.Unlock()
+		gm.CancelMatch(match.ChatID)
+		return
+	}
+
+	gm.ChatIDGames[match.ChatID] = append(gm.ChatIDGames[match.ChatID], game)
+	gm.UserIDPlayers[u1.ID] = append(gm.UserIDPlayers[u1.ID], p1)
+	gm.UserIDPlayers[u2.ID] = append(gm.UserIDPlayers[u2.ID], p2)
+	gm.UserIDCurrent[u1.ID] = p1
+	gm.UserIDCurrent[u2.ID] = p2
+
+	match.CurrentGame = game
+	match.State = MatchPlaying
+	gm.Unlock()
+
+	if game.LastCard != nil {
+		sendSticker(bot, match.ChatID, Stickers[game.LastCard.String()])
+	}
+
+	firstMsg := fmt.Sprintf("Partida %d! %s vs %s\nPrimeiro jogador: %s",
+		match.Wins1+match.Wins2+1,
+		displayName(u1), displayName(u2),
+		displayName(game.CurrentPlayer.User))
+	sendNextMessage(bot, match.ChatID, firstMsg)
+	startPlayerCountdown(bot, game)
+}
+
+func (gm *GameManager) endMatchGame(bot *telego.Bot, match *Match, winner *Player) {
+	gm.Lock()
+
+	game := match.CurrentGame
+	if game == nil {
+		gm.Unlock()
+		return
+	}
+
+	gm.removeGamePlayers(game)
+	games := gm.ChatIDGames[match.ChatID]
+	for i, g := range games {
+		if g == game {
+			gm.ChatIDGames[match.ChatID] = append(games[:i], games[i+1:]...)
+			break
+		}
+	}
+	if len(gm.ChatIDGames[match.ChatID]) == 0 {
+		delete(gm.ChatIDGames, match.ChatID)
+	}
+
+	match.CurrentGame = nil
+
+	if winner.User.ID == match.Challenger.ID {
+		match.Wins1++
+	} else {
+		match.Wins2++
+	}
+
+	if match.Wins1 >= match.TargetWins || match.Wins2 >= match.TargetWins {
+		if match.Wins1 >= match.TargetWins {
+			match.winner = match.Challenger
+		} else {
+			match.winner = match.Challenged
+		}
+		match.State = MatchFinished
+		gm.Unlock()
+		other := match.Challenger
+		if match.winner.ID == match.Challenger.ID {
+			other = match.Challenged
+		}
+		rankingStore.RecordChallengeWin(match.winner, match.ChatID)
+		rankingStore.RecordChallengeLoss(other, match.ChatID)
+		rankingStore.UpdateHeadToHead(match.ChatID, match.winner, other, match.Wins1, match.Wins2)
+		sendMatchScore(bot, match)
+		msgID := sendMessage(bot, match.ChatID, fmt.Sprintf("🏆 %s venceu o %s contra %s! Placar: %d×%d",
+			displayName(match.winner), match.formatLabel(), displayName(other), match.Wins1, match.Wins2))
+		reactMessage(bot, match.ChatID, msgID, "🎉")
+		gm.CancelMatch(match.ChatID)
+	} else {
+		match.State = MatchBetweenGames
+		gm.Unlock()
+		sendMatchScore(bot, match)
+	}
 }
 
 func (gm *GameManager) CleanGames(chatID int64) (int, error) {

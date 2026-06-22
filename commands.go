@@ -77,6 +77,10 @@ func handleMessage(bot *telego.Bot, message telego.Message) {
 		cmdRankingDiario(bot, message, chatID)
 	case "/semanal":
 		cmdRankingSemanal(bot, message, chatID)
+	case "/desafio":
+		cmdDesafio(bot, message, user, chatID)
+	case "/rankingx1":
+		cmdRankingX1(bot, message, user, chatID)
 	}
 }
 
@@ -492,9 +496,169 @@ func cmdRankingSemanal(bot *telego.Bot, msg telego.Message, chatID int64) {
 	}
 }
 
+func cmdDesafio(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
+	if msg.Chat.Type != telego.ChatTypeGroup && msg.Chat.Type != telego.ChatTypeSupergroup {
+		sendMessage(bot, chatID, "Use este comando em um grupo.")
+		return
+	}
+
+	match := gm.NewMatch(chatID, user)
+	if match == nil {
+		sendMessage(bot, chatID, "Já existe um jogo ou desafio ativo neste grupo.")
+		return
+	}
+
+	text := fmt.Sprintf("🎮 %s quer um desafio!\nFormato: %s",
+		displayName(user), match.formatLabel())
+
+	sent, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
+		ChatID: telego.ChatID{ID: chatID},
+		Text:   text,
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{
+					{Text: "✅ Aceitar", CallbackData: "challenge_accept"},
+					{Text: "⚙️ Configurar", CallbackData: "challenge_config"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao enviar desafio: %v", err)
+		gm.CancelMatch(chatID)
+		return
+	}
+
+	match.MessageID = sent.MessageID
+}
+
+func handleChallengeCallback(bot *telego.Bot, query telego.CallbackQuery, chatID int64, messageID int, user *UserData) {
+	match := gm.GetMatch(chatID)
+	if match == nil {
+		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            "Desafio não encontrado ou já encerrado.",
+		})
+		return
+	}
+
+	switch query.Data {
+	case "challenge_config":
+		formatConfigMenu(bot, chatID, match)
+
+	case "challenge_md1":
+		match.BestOf = 1
+		match.TargetWins = 1
+		formatChallengeMenu(bot, chatID, match)
+
+	case "challenge_md3":
+		match.BestOf = 3
+		match.TargetWins = 2
+		formatChallengeMenu(bot, chatID, match)
+
+	case "challenge_md5":
+		match.BestOf = 5
+		match.TargetWins = 3
+		formatChallengeMenu(bot, chatID, match)
+
+	case "challenge_accept":
+		if user.ID == match.Challenger.ID {
+			_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+				CallbackQueryID: query.ID,
+				Text:            "Você não pode aceitar seu próprio desafio!",
+			})
+			return
+		}
+		match.Challenged = user
+		match.State = MatchBetweenGames
+		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+		})
+		sendMatchAccepted(bot, match)
+
+	case "match_start":
+		if match.State != MatchBetweenGames || match.Challenged == nil {
+			return
+		}
+		if user.ID != match.Challenger.ID && user.ID != match.Challenged.ID {
+			_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+				CallbackQueryID: query.ID,
+				Text:            "Apenas os jogadores do desafio podem iniciar.",
+			})
+			return
+		}
+		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+		})
+		gm.startMatchGame(bot, match)
+
+	case "match_next":
+		if match.State != MatchBetweenGames {
+			return
+		}
+		if user.ID != match.Challenger.ID && user.ID != match.Challenged.ID {
+			return
+		}
+		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+		})
+		gm.startMatchGame(bot, match)
+
+	case "match_cancel":
+		gm.CancelMatch(chatID)
+		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+		})
+		_, _ = bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+			ChatID:    telego.ChatID{ID: chatID},
+			MessageID: messageID,
+			Text:      "Desafio cancelado.",
+		})
+	}
+}
+
+func cmdRankingX1(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
+	list := rankingStore.GetChallengeRanking(chatID, user.ID)
+
+	if len(list) == 0 {
+		sendMessage(bot, chatID, "Nenhum confronto registrado para você neste grupo.")
+		return
+	}
+
+	text := fmt.Sprintf("Confrontos de %s:\n\n", displayName(user))
+	for _, h := range list {
+		opName := fmt.Sprintf("ID %d", h.OpponentID)
+		text += fmt.Sprintf("vs %s — %dV %dD\n", opName, h.MyWins, h.MyLosses)
+	}
+
+	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
+		ChatID: telego.ChatID{ID: chatID},
+		Text:   text,
+		ReplyParameters: &telego.ReplyParameters{
+			MessageID: msg.MessageID,
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao enviar ranking x1: %v", err)
+	}
+}
+
 func handleCallbackQuery(bot *telego.Bot, query telego.CallbackQuery) {
 	chatID := query.Message.GetChat().ID
 	messageID := query.Message.GetMessageID()
+	data := query.Data
+	user := &UserData{
+		ID:        query.From.ID,
+		FirstName: query.From.FirstName,
+		Username:  query.From.Username,
+	}
+
+	switch data {
+	case "challenge_accept", "challenge_config", "challenge_md1", "challenge_md3", "challenge_md5",
+		"match_start", "match_next", "match_cancel":
+		handleChallengeCallback(bot, query, chatID, messageID, user)
+		return
+	}
 
 	var periodo, periodoLabel string
 	switch query.Data {

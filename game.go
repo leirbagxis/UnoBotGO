@@ -21,6 +21,7 @@ type Game struct {
 	Owner         []int64
 	Mode          string
 	Open          bool
+	MatchID       int64
 }
 
 func NewGame(chatID int64) *Game {

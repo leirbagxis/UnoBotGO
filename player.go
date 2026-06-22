@@ -13,7 +13,6 @@ type Player struct {
 	Prev        *Player
 	Drew        bool
 	Bluffing    bool
-	AntiCheat   int
 	TurnStarted time.Time
 	WaitingTime int
 }
@@ -106,19 +105,6 @@ func (p *Player) Play(card *Card) {
 		log.Printf("[Player.Play] WARNING: Card %s NOT found in player's hand! Hand: %+v", card.String(), p.Cards)
 	}
 	p.Game.PlayCard(card)
-}
-
-func (p *Player) HasCard(resultID string) bool {
-	card := CardFromStr(resultID)
-	if card == nil {
-		return false
-	}
-	for _, c := range p.Cards {
-		if c.Equal(card) {
-			return true
-		}
-	}
-	return false
 }
 
 func (p *Player) PlayableCards() []*Card {

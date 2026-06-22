@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -93,20 +92,15 @@ func handleInlineQuery(bot *telego.Bot, query telego.InlineQuery) {
 					addCallBluff(&results)
 				}
 				playable := player.PlayableCards()
-				addedIDs := make(map[string]bool)
 				for _, card := range sortedCards(player.Cards) {
-					key := card.String()
-					if !addedIDs[key] {
-						canPlay := false
-						for _, pc := range playable {
-							if pc.Equal(card) {
-								canPlay = true
-								break
-							}
+					canPlay := false
+					for _, pc := range playable {
+						if pc.Equal(card) {
+							canPlay = true
+							break
 						}
-						addCard(game, card, &results, canPlay)
-						addedIDs[key] = true
 					}
+					addCard(game, card, &results, canPlay)
 				}
 				addGameInfo(game, &results)
 			}
@@ -118,13 +112,13 @@ func handleInlineQuery(bot *telego.Bot, query telego.InlineQuery) {
 			addGameInfo(game, &results)
 		}
 
-	for _, res := range results {
-		uniqueID := time.Now().UnixNano()
+	for i, res := range results {
+		suffix := fmt.Sprintf(":%d", i)
 		switch r := res.(type) {
 		case *telego.InlineQueryResultCachedSticker:
-			r.ID = fmt.Sprintf("%s:%d:%d", r.ID, uniqueID, player.AntiCheat)
+			r.ID += suffix
 		case *telego.InlineQueryResultArticle:
-			r.ID = fmt.Sprintf("%s:%d:%d", r.ID, uniqueID, player.AntiCheat)
+			r.ID += suffix
 		}
 	}
 	}
@@ -156,35 +150,14 @@ func handleChosenInlineResult(bot *telego.Bot, result telego.ChosenInlineResult)
 	}
 	game := player.Game
 
-	parts := strings.SplitN(result.ResultID, ":", 3)
+	parts := strings.SplitN(result.ResultID, ":", 2)
 	if len(parts) < 2 {
 		log.Printf("[ChosenInlineResult] Invalid resultID format: %s", result.ResultID)
 		return
 	}
 	resultID := parts[0]
-	antiCheatStr := parts[len(parts)-1]
 
-	antiCheatVal, err := strconv.Atoi(antiCheatStr)
-	if err != nil {
-		log.Printf("[ChosenInlineResult] Error parsing antiCheatStr: %v", err)
-		return
-	}
-
-	if antiCheatVal != player.AntiCheat {
-		log.Printf("[ChosenInlineResult] Cheat attempt / obsolete action by %s! Got: %d, expected: %d", player.User.FirstName, antiCheatVal, player.AntiCheat)
-		// Se for carta e ainda está na mão, tolera anti-cheat defasado (cache do Telegram)
-		if resultID != "draw" && resultID != "pass" && resultID != "call_bluff" &&
-			!strings.HasPrefix(resultID, "mode_") && player.HasCard(resultID) {
-			log.Printf("[ChosenInlineResult] Tolerating stale anti-cheat for card %s (still in hand)", resultID)
-		} else {
-			sendMessage(bot, player.Game.ChatID, "Ação expirada! Toque em 'Suas cartas' antes de jogar.")
-			return
-		}
-	}
-
-	player.AntiCheat++
-	log.Printf("[ChosenInlineResult] Valid action! Player: %s for chatID: %d. Processing resultID: %s, next anti-cheat count: %d", player.User.FirstName, game.ChatID, resultID, player.AntiCheat)
-	log.Printf("Selected result: %s", resultID)
+	log.Printf("[ChosenInlineResult] Result from %s: %s", player.User.FirstName, resultID)
 
 	if resultID == "hand" || resultID == "gameinfo" || resultID == "nogame" {
 		return
@@ -234,6 +207,11 @@ func handleChosenInlineResult(bot *telego.Bot, result telego.ChosenInlineResult)
 	}
 
 afterAction:
+	if game.MatchID != 0 && gm.GetMatch(game.ChatID) == nil {
+		game.Unlock()
+		return
+	}
+
 	started := game.Started
 	var nextPlayerUser *UserData
 	if game.CurrentPlayer != nil {
