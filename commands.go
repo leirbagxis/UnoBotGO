@@ -69,8 +69,6 @@ func handleMessage(bot *telego.Bot, message telego.Message) {
 		cmdCleanGames(bot, message, user, chatID)
 	case "/ajuda":
 		cmdHelp(bot, message, chatID)
-	case "/modos":
-		cmdModes(bot, message, chatID)
 	case "/ranking":
 		cmdRanking(bot, message, chatID)
 	case "/diario":
@@ -126,7 +124,7 @@ func cmdJoinGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int
 
 func cmdStartGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
 	if msg.Chat.Type == telego.ChatTypePrivate {
-		text := `<b>🎮 UnoBotGO</b>
+		text := fmt.Sprintf(`<b>🎮 UnoBotGO</b>
 
 Bot para jogar UNO em grupos do Telegram.
 
@@ -135,17 +133,14 @@ Bot para jogar UNO em grupos do Telegram.
 2. No grupo, use /novo para criar um jogo
 3. Jogadores entram com /entrar
 4. Inicie com /start
-5. Digite <code>@lagostaanimobot</code> na mensagem para ver suas cartas
+5. Digite <code>@%s</code> na mensagem para ver suas cartas
 
 <b>Comandos principais:</b>
 /novo - Criar novo jogo
 /entrar - Entrar no jogo
 /start - Iniciar o jogo
 /ajuda - Lista completa
-/ranking - Rankings
-
-<b>Modos de jogo:</b>
-🎻 Classic • 🚀 Sanic • 🐉 Wild • ✍️ Text`
+/ranking - Rankings`, botUsername)
 
 		sendMessage(bot, chatID, text)
 		return
@@ -425,24 +420,11 @@ Comandos:
 /limpar - Limpar jogos não iniciados
 /notificar - Notificar quando novo jogo começar
 /ajuda - Esta ajuda
-/modos - Explicação dos modos de jogo
 /desafio - Desafiar alguém para um MD1/MD3/MD5
 /ranking - Ranking mensal
 /diario - Ranking diário
 /semanal - Ranking semanal`
 	sendMessage(bot, chatID, helpText)
-}
-
-func cmdModes(bot *telego.Bot, msg telego.Message, chatID int64) {
-	modesText := `Este bot tem quatro modos de jogo:
-
-🎻 Classic - Baralho UNO convencional, sem auto-skip
-🚀 Sanic - Baralho UNO convencional, auto-skip
-🐉 Wild - Mais cartas especiais, menos números
-✍️ Text - Baralho UNO convencional, sem stickers
-
-O criador do jogo pode mudar o modo digitando @ na janela.`
-	sendMessage(bot, chatID, modesText)
 }
 
 func cmdRanking(bot *telego.Bot, msg telego.Message, chatID int64) {

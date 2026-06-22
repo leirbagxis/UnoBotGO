@@ -25,8 +25,14 @@ func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
 	}
 
 	if len(player.Cards) == 1 {
-		msgID := sendMessage(bot, chatID, "UNO!")
-		reactMessage(bot, chatID, msgID, "😱")
+		msg, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
+			ChatID:    telego.ChatID{ID: chatID},
+			Text:      fmt.Sprintf(`<a href="tg://user?id=%d">%s</a> Gritou Uno!`, player.User.ID, player.User.FirstName),
+			ParseMode: telego.ModeHTML,
+		})
+		if err == nil {
+			reactMessage(bot, chatID, msg.MessageID, "😱")
+		}
 	}
 
 	if len(player.Cards) == 0 {
