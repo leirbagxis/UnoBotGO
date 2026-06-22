@@ -92,10 +92,11 @@ func (rs *RankingStore) RecordWin(user *UserData, chatID int64) {
 }
 
 type HeadToHead struct {
-	OpponentID  int64
-	OpponentName string
-	MyWins      int
-	MyLosses    int
+	OpponentID      int64
+	OpponentName    string
+	OpponentUsername string
+	MyWins          int
+	MyLosses        int
 }
 
 func (rs *RankingStore) RecordChallengeWin(user *UserData, chatID int64) {
@@ -131,11 +132,20 @@ func (rs *RankingStore) RecordChallengeLoss(user *UserData, chatID int64) {
 func (rs *RankingStore) GetChallengeRanking(chatID int64, userID int64) []HeadToHead {
 	rows, err := rs.db.Query(
 		`SELECT
-			CASE WHEN player1_id = $2 THEN player2_id ELSE player1_id END as opponent_id,
-			CASE WHEN player1_id = $2 THEN p1_wins ELSE p2_wins END as my_wins,
-			CASE WHEN player1_id = $2 THEN p2_wins ELSE p1_wins END as my_losses
-		FROM challenge_headtohead
-		WHERE chat_id = $1 AND (player1_id = $2 OR player2_id = $2)
+			opponent_id,
+			my_wins,
+			my_losses,
+			COALESCE(cw.first_name, '') as opponent_first_name,
+			COALESCE(cw.username, '') as opponent_username
+		FROM (
+			SELECT
+				CASE WHEN player1_id = $2 THEN player2_id ELSE player1_id END as opponent_id,
+				CASE WHEN player1_id = $2 THEN p1_wins ELSE p2_wins END as my_wins,
+				CASE WHEN player1_id = $2 THEN p2_wins ELSE p1_wins END as my_losses
+			FROM challenge_headtohead
+			WHERE chat_id = $1 AND (player1_id = $2 OR player2_id = $2)
+		) sub
+		LEFT JOIN challenge_wins cw ON cw.user_id = sub.opponent_id AND cw.chat_id = $1
 		ORDER BY my_wins DESC`,
 		chatID, userID,
 	)
@@ -148,7 +158,7 @@ func (rs *RankingStore) GetChallengeRanking(chatID int64, userID int64) []HeadTo
 	var result []HeadToHead
 	for rows.Next() {
 		var h HeadToHead
-		if err := rows.Scan(&h.OpponentID, &h.MyWins, &h.MyLosses); err != nil {
+		if err := rows.Scan(&h.OpponentID, &h.MyWins, &h.MyLosses, &h.OpponentName, &h.OpponentUsername); err != nil {
 			log.Printf("Erro ao ler linha do ranking de desafios: %v", err)
 			continue
 		}

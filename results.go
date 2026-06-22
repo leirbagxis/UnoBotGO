@@ -22,11 +22,12 @@ func playerList(game *Game) string {
 }
 
 func gameInfo(game *Game) *telego.InputTextMessageContent {
-	text := fmt.Sprintf("Jogador atual: %s\n", displayName(game.CurrentPlayer.User))
+	text := fmt.Sprintf("Jogador atual: %s\n", displayLink(game.CurrentPlayer.User))
 	text += fmt.Sprintf("Última carta: %s\n", game.LastCard.Repr())
 	text += fmt.Sprintf("Jogadores: %s", playerList(game))
 	return &telego.InputTextMessageContent{
 		MessageText: text,
+		ParseMode:   "HTML",
 	}
 }
 
@@ -240,8 +241,20 @@ func colorName(color string) string {
 }
 
 func displayName(user *UserData) string {
+	name := user.FirstName
+	if user.Username != "" {
+		name += " (@" + user.Username + ")"
+	}
+	return name
+}
+
+func displayLink(user *UserData) string {
 	if user == nil {
 		return ""
 	}
-	return fmt.Sprintf(`<a href="tg://user?id=%d">%s</a>`, user.ID, html.EscapeString(user.FirstName))
+	name := user.FirstName
+	if name == "" {
+		name = fmt.Sprintf("User %d", user.ID)
+	}
+	return fmt.Sprintf(`<a href="tg://user?id=%d">%s</a>`, user.ID, html.EscapeString(name))
 }

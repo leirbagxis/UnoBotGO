@@ -30,7 +30,7 @@ func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
 	}
 
 	if len(player.Cards) == 0 {
-		msgID := sendMessage(bot, chatID, fmt.Sprintf("%s venceu!", player.User.FirstName))
+		msgID := sendMessage(bot, chatID, fmt.Sprintf("%s venceu!", displayLink(player.User)))
 		reactMessage(bot, chatID, msgID, "🎉")
 		game.PlayersWon++
 
@@ -87,22 +87,22 @@ func doSkip(bot *telego.Bot, player *Player) {
 		n := skippedPlayer.WaitingTime
 		sendNextMessage(bot, chatID, fmt.Sprintf(
 			"Tempo de espera para pular este jogador foi reduzido para %d segundos.\nPróximo jogador: %s",
-			n, displayName(nextPlayer.User)))
+			n, displayLink(nextPlayer.User)))
 		log.Printf("%s foi pulado!", displayName(player.User))
 		game.Turn()
 	} else {
 		err := gm.LeaveGame(skippedPlayer.User, chatID)
 		if err == ErrNotEnoughPlayers {
 			game.Started = false
-			sendMessage(bot, chatID, fmt.Sprintf(
-				"%s ficou sem tempo e foi removido!\nJogo encerrado.",
-				displayName(skippedPlayer.User)))
+		sendMessage(bot, chatID, fmt.Sprintf(
+			"%s ficou sem tempo e foi removido!\nJogo encerrado.",
+			displayLink(skippedPlayer.User)))
 			gm.EndGameByGame(chatID, game)
 		} else {
-			sendNextMessage(bot, chatID, fmt.Sprintf(
-				"%s ficou sem tempo e foi removido!\nPróximo jogador: %s",
-				displayName(skippedPlayer.User), displayName(nextPlayer.User)))
-			log.Printf("%s foi pulado!", displayName(player.User))
+		sendNextMessage(bot, chatID, fmt.Sprintf(
+			"%s ficou sem tempo e foi removido!\nPróximo jogador: %s",
+			displayLink(skippedPlayer.User), displayLink(nextPlayer.User)))
+		log.Printf("%s foi pulado!", displayName(player.User))
 		}
 	}
 }

@@ -180,7 +180,7 @@ Bot para jogar UNO em grupos do Telegram.
 
 	firstMsg := fmt.Sprintf(
 		"Primeiro jogador: %s\nUse /fechar para impedir que mais pessoas entrem.",
-		displayName(game.CurrentPlayer.User))
+		displayLink(game.CurrentPlayer.User))
 	sendNextMessage(bot, chatID, firstMsg)
 	startPlayerCountdown(bot, game)
 }
@@ -198,9 +198,9 @@ func cmdLeaveGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID in
 	case nil:
 		if game.Started {
 			gm.UpdateCurrentPlayer(game)
-			sendNextMessage(bot, chatID, fmt.Sprintf("OK. Próximo jogador: %s", displayName(game.CurrentPlayer.User)))
+			sendNextMessage(bot, chatID, fmt.Sprintf("OK. Próximo jogador: %s", displayLink(game.CurrentPlayer.User)))
 		} else {
-			sendMessage(bot, chatID, fmt.Sprintf("%s saiu do jogo.", displayName(user)))
+			sendMessage(bot, chatID, fmt.Sprintf("%s saiu do jogo.", displayLink(user)))
 		}
 	case ErrNoGameInChat:
 		sendMessage(bot, chatID, "Você não está em nenhum jogo neste grupo.")
@@ -293,7 +293,7 @@ func cmdSkipPlayer(bot *telego.Bot, msg telego.Message, user *UserData, chatID i
 
 	doSkip(bot, player)
 	if game.Started && game.CurrentPlayer != nil {
-		sendNextMessage(bot, chatID, fmt.Sprintf("Próximo jogador: %s", displayName(game.CurrentPlayer.User)))
+		sendNextMessage(bot, chatID, fmt.Sprintf("Próximo jogador: %s", displayLink(game.CurrentPlayer.User)))
 	}
 }
 
@@ -335,24 +335,24 @@ func cmdKickPlayer(bot *telego.Bot, msg telego.Message, user *UserData, chatID i
 		Username:  msg.ReplyToMessage.From.Username,
 	}
 
-	err := gm.LeaveGame(kicked, chatID)
+		err := gm.LeaveGame(kicked, chatID)
 	if err == ErrNotEnoughPlayers {
 		kickedPlayer := gm.PlayerForUserInChat(kicked, chatID)
 		if kickedPlayer != nil {
 			kickedPlayer.Game.Started = false
 			gm.EndGameByGame(chatID, kickedPlayer.Game)
 		}
-		sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayName(kicked), displayName(user)))
+		sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayLink(kicked), displayLink(user)))
 		sendMessage(bot, chatID, "Jogo encerrado!")
 		return
 	} else if err != nil {
-		sendMessage(bot, chatID, fmt.Sprintf("Jogador %s não encontrado.", displayName(kicked)))
+		sendMessage(bot, chatID, fmt.Sprintf("Jogador %s não encontrado.", displayLink(kicked)))
 		return
 	}
 
-	sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayName(kicked), displayName(user)))
+	sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayLink(kicked), displayLink(user)))
 	if game.Started && game.CurrentPlayer != nil {
-		sendNextMessage(bot, chatID, fmt.Sprintf("Próximo jogador: %s", displayName(game.CurrentPlayer.User)))
+		sendNextMessage(bot, chatID, fmt.Sprintf("Próximo jogador: %s", displayLink(game.CurrentPlayer.User)))
 	}
 }
 
@@ -530,11 +530,12 @@ func cmdDesafio(bot *telego.Bot, msg telego.Message, user *UserData, chatID int6
 	}
 
 	text := fmt.Sprintf("🎮 %s quer um desafio!\nFormato: %s",
-		displayName(user), match.formatLabel())
+		displayLink(user), match.formatLabel())
 
 	sent, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID: telego.ChatID{ID: chatID},
-		Text:   text,
+		ChatID:    telego.ChatID{ID: chatID},
+		Text:      text,
+		ParseMode: telego.ModeHTML,
 		ReplyMarkup: &telego.InlineKeyboardMarkup{
 			InlineKeyboard: [][]telego.InlineKeyboardButton{
 				{
@@ -646,15 +647,20 @@ func cmdRankingX1(bot *telego.Bot, msg telego.Message, user *UserData, chatID in
 		return
 	}
 
-	text := fmt.Sprintf("Confrontos de %s:\n\n", displayName(user))
+	text := fmt.Sprintf("Confrontos de %s:\n\n", displayLink(user))
 	for _, h := range list {
-		opName := fmt.Sprintf("ID %d", h.OpponentID)
-		text += fmt.Sprintf("vs %s — %dV %dD\n", opName, h.MyWins, h.MyLosses)
+		opUser := &UserData{
+			ID:        h.OpponentID,
+			FirstName: h.OpponentName,
+			Username:  h.OpponentUsername,
+		}
+		text += fmt.Sprintf("vs %s — %dV %dD\n", displayLink(opUser), h.MyWins, h.MyLosses)
 	}
 
 	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID: telego.ChatID{ID: chatID},
-		Text:   text,
+		ChatID:    telego.ChatID{ID: chatID},
+		Text:      text,
+		ParseMode: telego.ModeHTML,
 		ReplyParameters: &telego.ReplyParameters{
 			MessageID: msg.MessageID,
 		},

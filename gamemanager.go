@@ -280,8 +280,8 @@ func (gm *GameManager) startMatchGame(bot *telego.Bot, match *Match) {
 
 	firstMsg := fmt.Sprintf("Partida %d! %s vs %s\nPrimeiro jogador: %s",
 		match.Wins1+match.Wins2+1,
-		displayName(u1), displayName(u2),
-		displayName(game.CurrentPlayer.User))
+		displayLink(u1), displayLink(u2),
+		displayLink(game.CurrentPlayer.User))
 	sendNextMessage(bot, match.ChatID, firstMsg)
 	startPlayerCountdown(bot, game)
 }
@@ -307,6 +307,7 @@ func (gm *GameManager) endMatchGame(bot *telego.Bot, match *Match, winner *Playe
 		delete(gm.ChatIDGames, match.ChatID)
 	}
 
+	game.Started = false
 	match.CurrentGame = nil
 
 	if winner.User.ID == match.Challenger.ID {
@@ -332,13 +333,28 @@ func (gm *GameManager) endMatchGame(bot *telego.Bot, match *Match, winner *Playe
 		rankingStore.UpdateHeadToHead(match.ChatID, match.winner, other, match.Wins1, match.Wins2)
 		sendMatchScore(bot, match)
 		msgID := sendMessage(bot, match.ChatID, fmt.Sprintf("🏆 %s venceu o %s contra %s! Placar: %d×%d",
-			displayName(match.winner), match.formatLabel(), displayName(other), match.Wins1, match.Wins2))
+			displayLink(match.winner), match.formatLabel(), displayLink(other), match.Wins1, match.Wins2))
 		reactMessage(bot, match.ChatID, msgID, "🎉")
 		gm.CancelMatch(match.ChatID)
 	} else {
 		match.State = MatchBetweenGames
 		gm.Unlock()
 		sendMatchScore(bot, match)
+		total := match.Wins1 + match.Wins2 + 1
+		_, _ = bot.SendMessage(botCtx, &telego.SendMessageParams{
+			ChatID:    telego.ChatID{ID: match.ChatID},
+			Text:      fmt.Sprintf("⚔️ %s %d × %d %s\n\nPreparar partida %d?",
+				displayLink(match.Challenger), match.Wins1, match.Wins2, displayLink(match.Challenged), total),
+			ParseMode: telego.ModeHTML,
+			ReplyMarkup: &telego.InlineKeyboardMarkup{
+				InlineKeyboard: [][]telego.InlineKeyboardButton{
+					{
+						{Text: "▶️ Próxima partida", CallbackData: "match_next"},
+						{Text: "❌ Cancelar", CallbackData: "match_cancel"},
+					},
+				},
+			},
+		})
 	}
 }
 

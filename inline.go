@@ -187,9 +187,12 @@ func handleChosenInlineResult(bot *telego.Bot, result telego.ChosenInlineResult)
 	}
 
 afterAction:
-	if game.MatchID != 0 && gm.GetMatch(game.ChatID) == nil {
-		game.Unlock()
-		return
+	if game.MatchID != 0 {
+		match := gm.GetMatch(game.ChatID)
+		if match == nil || match.State != MatchPlaying {
+			game.Unlock()
+			return
+		}
 	}
 
 	started := game.Started
@@ -201,7 +204,7 @@ afterAction:
 
 	if started && nextPlayerUser != nil {
 		gm.UpdateCurrentPlayer(game)
-		nextMsg := fmt.Sprintf("Próximo jogador: %s", displayName(nextPlayerUser))
+		nextMsg := fmt.Sprintf("Próximo jogador: %s", displayLink(nextPlayerUser))
 		sendNextMessage(bot, game.ChatID, nextMsg)
 	}
 }

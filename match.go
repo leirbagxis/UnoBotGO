@@ -33,7 +33,8 @@ type Match struct {
 }
 
 func (m *Match) formatLabel() string {
-	return fmt.Sprintf("MD%d", m.BestOf)
+	s := fmt.Sprintf("MD%d", m.BestOf)
+	return s
 }
 
 func (m *Match) winsNeeded() int {
@@ -42,19 +43,20 @@ func (m *Match) winsNeeded() int {
 
 func (m *Match) winnerName() string {
 	if m.winner != nil {
-		return displayName(m.winner)
+		return displayLink(m.winner)
 	}
 	return ""
 }
 
 func formatChallengeMenu(bot *telego.Bot, chatID int64, match *Match) {
 	text := fmt.Sprintf("🎮 %s quer um desafio!\nFormato: %s",
-		displayName(match.Challenger), match.formatLabel())
+		displayLink(match.Challenger), match.formatLabel())
 
 	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
 		ChatID:    telego.ChatID{ID: chatID},
 		MessageID: match.MessageID,
 		Text:      text,
+		ParseMode: telego.ModeHTML,
 		ReplyMarkup: &telego.InlineKeyboardMarkup{
 			InlineKeyboard: [][]telego.InlineKeyboardButton{
 				{
@@ -91,12 +93,13 @@ func formatConfigMenu(bot *telego.Bot, chatID int64, match *Match) {
 
 func sendMatchAccepted(bot *telego.Bot, match *Match) {
 	text := fmt.Sprintf("✅ %s aceitou o %s contra %s!\nPlacar: 0×0\n\nPreparar partida 1?",
-		displayName(match.Challenged), match.formatLabel(), displayName(match.Challenger))
+		displayLink(match.Challenged), match.formatLabel(), displayLink(match.Challenger))
 
 	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
 		ChatID:    telego.ChatID{ID: match.ChatID},
 		MessageID: match.MessageID,
 		Text:      text,
+		ParseMode: telego.ModeHTML,
 		ReplyMarkup: &telego.InlineKeyboardMarkup{
 			InlineKeyboard: [][]telego.InlineKeyboardButton{
 				{
@@ -115,10 +118,10 @@ func sendMatchScore(bot *telego.Bot, match *Match) {
 	var text string
 	if match.winner != nil {
 		text = fmt.Sprintf("🏆 %s venceu o %s!\nPlacar final: %d×%d",
-			displayName(match.winner), match.formatLabel(), match.Wins1, match.Wins2)
+			displayLink(match.winner), match.formatLabel(), match.Wins1, match.Wins2)
 	} else {
-		p1Name := displayName(match.Challenger)
-		p2Name := displayName(match.Challenged)
+		p1Name := displayLink(match.Challenger)
+		p2Name := displayLink(match.Challenged)
 		total := match.Wins1 + match.Wins2 + 1
 		text = fmt.Sprintf("%s %d × %d %s\n\nPreparar partida %d?",
 			p1Name, match.Wins1, match.Wins2, p2Name, total)
@@ -138,6 +141,7 @@ func sendMatchScore(bot *telego.Bot, match *Match) {
 		ChatID:    telego.ChatID{ID: match.ChatID},
 		MessageID: match.MessageID,
 		Text:      text,
+		ParseMode: telego.ModeHTML,
 		ReplyMarkup: &telego.InlineKeyboardMarkup{
 			InlineKeyboard: keyboard,
 		},
