@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:17
+    restart: always
+    environment:
+      POSTGRES_USER: unobot
+      POSTGRES_PASSWORD: unobot
+      POSTGRES_DB: unobot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unobot -d unobot"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    environment:
+      TOKEN: ${TOKEN}
+      DATABASE_URL: postgres://unobot:unobot@db:5432/unobot?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
