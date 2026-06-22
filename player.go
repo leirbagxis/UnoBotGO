@@ -90,19 +90,16 @@ func (p *Player) Draw() error {
 }
 
 func (p *Player) Play(card *Card) {
-	log.Printf("[Player.Play] Player %s is trying to play card: %s (hand size: %d)", p.User.FirstName, card.String(), len(p.Cards))
 	found := false
 	for i, c := range p.Cards {
-		log.Printf("[Player.Play] Comparing hand card [%d]: %s with played card: %s (Equal: %v)", i, c.String(), card.String(), c.Equal(card))
 		if c.Equal(card) {
-			log.Printf("[Player.Play] MATCH FOUND! Removing card %s at index %d (hand size before: %d)", card.String(), i, len(p.Cards))
 			p.Cards = append(p.Cards[:i], p.Cards[i+1:]...)
 			found = true
 			break
 		}
 	}
 	if !found {
-		log.Printf("[Player.Play] WARNING: Card %s NOT found in player's hand! Hand: %+v", card.String(), p.Cards)
+		log.Printf("[Player.Play] WARNING: Card %s NOT found in player's hand!", card.String())
 	}
 	p.Game.PlayCard(card)
 }

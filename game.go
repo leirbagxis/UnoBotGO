@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"sync"
 	"time"
 )
@@ -104,7 +103,6 @@ func (g *Game) Reverse() {
 }
 
 func (g *Game) Turn() {
-	log.Println("Next Player")
 	if g.Reversed {
 		g.CurrentPlayer = g.CurrentPlayer.Prev
 	} else {
@@ -120,16 +118,13 @@ func (g *Game) PlayCard(card *Card) {
 		g.Deck.Dismiss(g.LastCard)
 	}
 	g.LastCard = card
-	log.Printf("Playing card %s", card.Repr())
 
 	if card.Value == Skip {
 		g.Turn()
 	} else if card.Special == DrawFour {
 		g.DrawCounter += 4
-		log.Println("Draw counter increased by 4")
 	} else if card.Value == DrawTwo {
 		g.DrawCounter += 2
-		log.Println("Draw counter increased by 2")
 	} else if card.Value == Reverse {
 		players := g.Players()
 		if len(players) >= 2 && g.CurrentPlayer.Next != nil &&
@@ -143,7 +138,6 @@ func (g *Game) PlayCard(card *Card) {
 	if card.Special != Choose && card.Special != DrawFour {
 		g.Turn()
 	} else {
-		log.Println("Choosing Color...")
 		g.ChoosingColor = true
 	}
 }

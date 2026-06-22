@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/mymmrac/telego"
@@ -239,9 +240,8 @@ func colorName(color string) string {
 }
 
 func displayName(user *UserData) string {
-	name := user.FirstName
-	if user.Username != "" {
-		name += " (@" + user.Username + ")"
+	if user == nil {
+		return ""
 	}
-	return name
+	return fmt.Sprintf(`<a href="tg://user?id=%d">%s</a>`, user.ID, html.EscapeString(user.FirstName))
 }

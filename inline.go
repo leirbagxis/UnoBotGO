@@ -30,8 +30,6 @@ func sendAnswerInlineQuery(bot *telego.Bot, params rawAnswerInlineQuery) error {
 		return fmt.Errorf("marshal: %w", err)
 	}
 
-	log.Printf("[sendAnswerInlineQuery] Sending answerInlineQuery with cache_time=0, results=%d", len(params.Results))
-
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/answerInlineQuery", botToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -41,19 +39,9 @@ func sendAnswerInlineQuery(bot *telego.Bot, params rawAnswerInlineQuery) error {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
-	log.Printf("[sendAnswerInlineQuery] Telegram response (status=%d): %s", resp.StatusCode, string(respBody))
-
 	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("api status: %s, body: %s", resp.Status, string(respBody))
-	}
-
-	// Check ok:true in response body
-	var tgResp struct {
-		OK bool `json:"ok"`
-	}
-	if err := json.Unmarshal(respBody, &tgResp); err == nil && !tgResp.OK {
-		return fmt.Errorf("telegram returned ok:false, body: %s", string(respBody))
 	}
 
 	return nil
@@ -134,30 +122,22 @@ func handleInlineQuery(bot *telego.Bot, query telego.InlineQuery) {
 	if err != nil {
 		log.Printf("Error answering inline query: %v", err)
 	}
-	if len(results) == 0 {
-		log.Printf("Empty results for inline query")
-	}
 }
 
 func handleChosenInlineResult(bot *telego.Bot, result telego.ChosenInlineResult) {
 	userID := result.From.ID
-	log.Printf("[ChosenInlineResult] Received ChosenInlineResult ID: %s for userID: %d, query: %s", result.ResultID, userID, result.Query)
 
 	player := gm.GetCurrentPlayer(userID)
 	if player == nil {
-		log.Printf("[ChosenInlineResult] Player is NIL for userID: %d", userID)
 		return
 	}
 	game := player.Game
 
 	parts := strings.SplitN(result.ResultID, ":", 2)
 	if len(parts) < 2 {
-		log.Printf("[ChosenInlineResult] Invalid resultID format: %s", result.ResultID)
 		return
 	}
 	resultID := parts[0]
-
-	log.Printf("[ChosenInlineResult] Result from %s: %s", player.User.FirstName, resultID)
 
 	if resultID == "hand" || resultID == "gameinfo" || resultID == "nogame" {
 		return

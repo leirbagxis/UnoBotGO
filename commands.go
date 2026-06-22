@@ -126,7 +126,28 @@ func cmdJoinGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int
 
 func cmdStartGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
 	if msg.Chat.Type == telego.ChatTypePrivate {
-		cmdHelp(bot, msg, chatID)
+		text := `<b>🎮 UnoBotGO</b>
+
+Bot para jogar UNO em grupos do Telegram.
+
+<b>Como usar:</b>
+1. Adicione o bot a um grupo
+2. No grupo, use /novo para criar um jogo
+3. Jogadores entram com /entrar
+4. Inicie com /start
+5. Digite <code>@lagostaanimobot</code> na mensagem para ver suas cartas
+
+<b>Comandos principais:</b>
+/novo - Criar novo jogo
+/entrar - Entrar no jogo
+/start - Iniciar o jogo
+/ajuda - Lista completa
+/ranking - Rankings
+
+<b>Modos de jogo:</b>
+🎻 Classic • 🚀 Sanic • 🐉 Wild • ✍️ Text`
+
+		sendMessage(bot, chatID, text)
 		return
 	}
 
@@ -405,10 +426,10 @@ Comandos:
 /notificar - Notificar quando novo jogo começar
 /ajuda - Esta ajuda
 /modos - Explicação dos modos de jogo
+/desafio - Desafiar alguém para um MD1/MD3/MD5
 /ranking - Ranking mensal
 /diario - Ranking diário
 /semanal - Ranking semanal`
-
 	sendMessage(bot, chatID, helpText)
 }
 

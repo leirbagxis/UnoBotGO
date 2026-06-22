@@ -135,8 +135,9 @@ func doCallBluff(bot *telego.Bot, player *Player) {
 
 func sendMessage(bot *telego.Bot, chatID int64, text string) int {
 	msg, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID: telego.ChatID{ID: chatID},
-		Text:   text,
+		ChatID:    telego.ChatID{ID: chatID},
+		Text:      text,
+		ParseMode: telego.ModeHTML,
 	})
 	if err != nil {
 		log.Printf("Error sending message: %v", err)
@@ -176,8 +177,9 @@ func sendSticker(bot *telego.Bot, chatID int64, fileID string) {
 
 func sendNextMessage(bot *telego.Bot, chatID int64, text string) {
 	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID: telego.ChatID{ID: chatID},
-		Text:   text,
+		ChatID:    telego.ChatID{ID: chatID},
+		Text:      text,
+		ParseMode: telego.ModeHTML,
 		ReplyMarkup: &telego.InlineKeyboardMarkup{
 			InlineKeyboard: [][]telego.InlineKeyboardButton{
 				{

@@ -33,7 +33,7 @@ func main() {
 	log.Println("Conectado ao PostgreSQL")
 	defer db.Close()
 
-	bot, err := telego.NewBot(botToken, telego.WithDefaultDebugLogger())
+	bot, err := telego.NewBot(botToken)
 	if err != nil {
 		log.Fatalf("Failed to create bot: %v", err)
 	}
