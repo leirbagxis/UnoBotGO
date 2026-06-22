@@ -91,6 +91,10 @@ func cmdNewGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int6
 	}
 
 	game := gm.NewGame(chatID)
+	if game == nil {
+		sendMessage(bot, chatID, "Já existe um desafio ativo neste grupo!")
+		return
+	}
 	if game.Starter != nil {
 		sendMessage(bot, chatID, "Já existe um jogo neste grupo!")
 		return
@@ -190,6 +194,11 @@ func cmdLeaveGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID in
 	}
 	game := player.Game
 
+	if game.MatchID != 0 {
+		sendMessage(bot, chatID, "Você não pode sair de um desafio. Use o botão Cancelar na mensagem do desafio.")
+		return
+	}
+
 	err := gm.LeaveGame(user, chatID)
 	switch err {
 	case nil:
@@ -201,6 +210,15 @@ func cmdLeaveGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID in
 		}
 	case ErrNoGameInChat:
 		sendMessage(bot, chatID, "Você não está em nenhum jogo neste grupo.")
+	case ErrLastPlayerWin:
+		game.Started = false
+		remaining := game.Players()
+		if len(remaining) == 1 {
+			msgID := sendMessage(bot, chatID, fmt.Sprintf("%s venceu! Último jogador restante.", displayLink(remaining[0].User)))
+			reactMessage(bot, chatID, msgID, "🎉")
+			rankingStore.RecordWin(remaining[0].User, chatID)
+		}
+		gm.EndGameByGame(chatID, game)
 	case ErrNotEnoughPlayers:
 		game.Started = false
 		gm.EndGameByGame(chatID, game)
@@ -213,6 +231,13 @@ func cmdLeaveGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID in
 func cmdKillGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
 	if msg.Chat.Type == telego.ChatTypePrivate {
 		cmdHelp(bot, msg, chatID)
+		return
+	}
+
+	match := gm.GetMatch(chatID)
+	if match != nil {
+		gm.CancelMatch(chatID)
+		sendMessage(bot, chatID, "Desafio cancelado!")
 		return
 	}
 
@@ -332,8 +357,27 @@ func cmdKickPlayer(bot *telego.Bot, msg telego.Message, user *UserData, chatID i
 		Username:  msg.ReplyToMessage.From.Username,
 	}
 
+		if game.MatchID != 0 {
+		sendMessage(bot, chatID, "Você não pode expulsar alguém de um desafio.")
+		return
+	}
+
 		err := gm.LeaveGame(kicked, chatID)
-	if err == ErrNotEnoughPlayers {
+	if err == ErrLastPlayerWin {
+		kickedPlayer := gm.PlayerForUserInChat(kicked, chatID)
+		if kickedPlayer != nil {
+			kickedPlayer.Game.Started = false
+		}
+		remaining := game.Players()
+		if len(remaining) == 1 {
+			sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayLink(kicked), displayLink(user)))
+			msgID := sendMessage(bot, chatID, fmt.Sprintf("%s venceu! Último jogador restante.", displayLink(remaining[0].User)))
+			reactMessage(bot, chatID, msgID, "🎉")
+			rankingStore.RecordWin(remaining[0].User, chatID)
+		}
+		gm.EndGameByGame(chatID, game)
+		return
+	} else if err == ErrNotEnoughPlayers {
 		kickedPlayer := gm.PlayerForUserInChat(kicked, chatID)
 		if kickedPlayer != nil {
 			kickedPlayer.Game.Started = false
@@ -438,6 +482,7 @@ func cmdModes(bot *telego.Bot, msg telego.Message, chatID int64) {
 🐉 <b>Wild</b> — Mais cartas especiais (+4 e Choose), menos números.
 ✍️ <b>Text</b> — UNO padrão. Apenas texto, sem stickers.
 🏠 <b>Caseiro</b> — +2 pode ser rebatido por +4; após +4 só +2 da cor escolhida.
+🧪 <b>Test</b> — Cartas específicas (+4, +2, Reverse). Regras Caseiro. Apenas para teste.
 
 O criador do jogo pode mudar o modo digitando @ no grupo antes de iniciar.`
 	sendMessage(bot, chatID, text)
@@ -581,6 +626,26 @@ func handleChallengeCallback(bot *telego.Bot, query telego.CallbackQuery, chatID
 		match.TargetWins = 3
 		formatChallengeMenu(bot, chatID, match)
 
+	case "challenge_mode_classic":
+		match.Mode = "classic"
+		formatChallengeMenu(bot, chatID, match)
+
+	case "challenge_mode_fast":
+		match.Mode = "fast"
+		formatChallengeMenu(bot, chatID, match)
+
+	case "challenge_mode_wild":
+		match.Mode = "wild"
+		formatChallengeMenu(bot, chatID, match)
+
+	case "challenge_mode_caseiro":
+		match.Mode = "caseiro"
+		formatChallengeMenu(bot, chatID, match)
+
+	case "challenge_mode_test":
+		match.Mode = "test"
+		formatChallengeMenu(bot, chatID, match)
+
 	case "challenge_accept":
 		if user.ID == match.Challenger.ID {
 			_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
@@ -680,6 +745,7 @@ func handleCallbackQuery(bot *telego.Bot, query telego.CallbackQuery) {
 
 	switch data {
 	case "challenge_accept", "challenge_config", "challenge_md1", "challenge_md3", "challenge_md5",
+		"challenge_mode_classic", "challenge_mode_fast", "challenge_mode_wild", "challenge_mode_caseiro", "challenge_mode_test",
 		"match_start", "match_next", "match_cancel":
 		handleChallengeCallback(bot, query, chatID, messageID, user)
 		return

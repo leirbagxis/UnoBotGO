@@ -65,6 +65,7 @@ func handleInlineQuery(bot *telego.Bot, query telego.InlineQuery) {
 				addModeWild(&results)
 				addModeText(&results)
 				addModeCaseiro(&results)
+				addModeTest(&results)
 			} else {
 				addNotStarted(&results)
 			}
@@ -182,6 +183,11 @@ func handleChosenInlineResult(bot *telego.Bot, result telego.ChosenInlineResult)
 	case resultID == "mode_caseiro":
 		game.SetMode("caseiro")
 		sendMessage(bot, game.ChatID, "Modo alterado para Caseiro 🏠")
+		game.Unlock()
+		return
+	case resultID == "mode_test":
+		game.SetMode("test")
+		sendMessage(bot, game.ChatID, "Modo alterado para Test 🧪")
 		game.Unlock()
 		return
 	default:

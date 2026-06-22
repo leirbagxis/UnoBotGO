@@ -45,6 +45,9 @@ func NewPlayer(game *Game, user *UserData) *Player {
 }
 
 func (p *Player) DrawFirstHand() error {
+	if p.Game.Mode == "test" {
+		return p.drawTestHand()
+	}
 	for i := 0; i < 7; i++ {
 		card, err := p.Game.Deck.Draw()
 		if err != nil {
@@ -54,6 +57,15 @@ func (p *Player) DrawFirstHand() error {
 			return err
 		}
 		p.Cards = append(p.Cards, card)
+	}
+	return nil
+}
+
+func (p *Player) drawTestHand() error {
+	p.Cards = []*Card{
+		{Special: DrawFour},
+		{Color: "r", Value: DrawTwo},
+		{Color: "b", Value: Reverse},
 	}
 	return nil
 }
@@ -146,8 +158,8 @@ func (p *Player) cardPlayable(card *Card) bool {
 	}
 
 	if last.Value == DrawTwo && p.Game.DrawCounter > 0 {
-		if p.Game.Mode == "caseiro" && card.Special == DrawFour {
-			// caseiro: +4 pode rebater +2
+		if (p.Game.Mode == "caseiro" || p.Game.Mode == "test") && card.Special == DrawFour {
+			// caseiro/test: +4 pode rebater +2
 		} else if card.Value != DrawTwo {
 			log.Println("Player has to draw and can't counter")
 			return false
@@ -155,7 +167,7 @@ func (p *Player) cardPlayable(card *Card) bool {
 	}
 
 	if last.Special == DrawFour && p.Game.DrawCounter > 0 {
-		if p.Game.Mode == "caseiro" && card.Value == DrawTwo && card.Color == last.Color {
+		if (p.Game.Mode == "caseiro" || p.Game.Mode == "test") && card.Value == DrawTwo && card.Color == last.Color {
 			// caseiro: +2 da cor escolhida pode ser jogado
 		} else {
 			log.Println("Player has to draw and can't counter")

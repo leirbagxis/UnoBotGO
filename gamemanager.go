@@ -119,10 +119,6 @@ func (gm *GameManager) leaveGame(user *UserData, chatID int64) error {
 	}
 
 	game := player.Game
-	allPlayers := game.Players()
-	if len(allPlayers) < 3 {
-		return ErrNotEnoughPlayers
-	}
 
 	if player == game.CurrentPlayer {
 		game.Turn()
@@ -144,6 +140,14 @@ func (gm *GameManager) leaveGame(user *UserData, chatID int64) error {
 			delete(gm.UserIDCurrent, user.ID)
 			delete(gm.UserIDPlayers, user.ID)
 		}
+	}
+
+	remaining := game.Players()
+	if len(remaining) <= 1 {
+		if len(remaining) == 1 {
+			return ErrLastPlayerWin
+		}
+		return ErrNotEnoughPlayers
 	}
 
 	return nil
@@ -207,7 +211,11 @@ func (gm *GameManager) NewMatch(chatID int64, challenger *UserData) *Match {
 	defer gm.Unlock()
 
 	if gm.ChatIDMatch[chatID] != nil {
-		return nil
+		if gm.ChatIDMatch[chatID].State == MatchWaiting {
+			delete(gm.ChatIDMatch, chatID)
+		} else {
+			return nil
+		}
 	}
 	games := gm.ChatIDGames[chatID]
 	if len(games) > 0 && games[len(games)-1].Started {
@@ -221,6 +229,7 @@ func (gm *GameManager) NewMatch(chatID int64, challenger *UserData) *Match {
 		ChatID:     chatID,
 		BestOf:     3,
 		TargetWins: 2,
+		Mode:       GetDefaultGamemode(),
 		State:      MatchWaiting,
 	}
 	gm.ChatIDMatch[chatID] = match
@@ -233,10 +242,14 @@ func (gm *GameManager) GetMatch(chatID int64) *Match {
 	return gm.ChatIDMatch[chatID]
 }
 
+func (gm *GameManager) cancelMatch(chatID int64) {
+	delete(gm.ChatIDMatch, chatID)
+}
+
 func (gm *GameManager) CancelMatch(chatID int64) {
 	gm.Lock()
 	defer gm.Unlock()
-	delete(gm.ChatIDMatch, chatID)
+	gm.cancelMatch(chatID)
 }
 
 func (gm *GameManager) startMatchGame(bot *telego.Bot, match *Match) {
@@ -251,7 +264,12 @@ func (gm *GameManager) startMatchGame(bot *telego.Bot, match *Match) {
 	p1 := NewPlayer(game, u1)
 	p2 := NewPlayer(game, u2)
 
-	game.Deck.FillClassic()
+	game.Mode = match.Mode
+	if game.Mode == "wild" {
+		game.Deck.FillWild()
+	} else {
+		game.Deck.FillClassic()
+	}
 	game.firstCard()
 	game.Started = true
 
@@ -361,6 +379,8 @@ func (gm *GameManager) endMatchGame(bot *telego.Bot, match *Match, winner *Playe
 func (gm *GameManager) CleanGames(chatID int64) (int, error) {
 	gm.Lock()
 	defer gm.Unlock()
+
+	gm.cancelMatch(chatID)
 
 	games := gm.ChatIDGames[chatID]
 	if len(games) == 0 {

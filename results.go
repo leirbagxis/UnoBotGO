@@ -242,6 +242,18 @@ func addModeCaseiro(results *[]telego.InlineQueryResult) {
 	})
 }
 
+func addModeTest(results *[]telego.InlineQueryResult) {
+	*results = append(*results, &telego.InlineQueryResultArticle{
+		Type:        "article",
+		ID:          "mode_test",
+		Title:       "📋 Escolha o modo de jogo",
+		Description: "🧪 Test",
+		InputMessageContent: &telego.InputTextMessageContent{
+			MessageText: "Test 🧪",
+		},
+	})
+}
+
 func colorName(color string) string {
 	switch color {
 	case Red:

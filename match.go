@@ -23,6 +23,7 @@ type Match struct {
 	ChatID        int64
 	BestOf        int
 	TargetWins    int
+	Mode          string
 	Wins1         int
 	Wins2         int
 	State         MatchState
@@ -48,9 +49,28 @@ func (m *Match) winnerName() string {
 	return ""
 }
 
+func modeDisplayName(mode string) string {
+	switch mode {
+	case "classic":
+		return "Classic 🎻"
+	case "fast":
+		return "Sanic 🚀"
+	case "wild":
+		return "Wild 🐉"
+	case "text":
+		return "Text ✍️"
+	case "caseiro":
+		return "Caseiro 🏠"
+	case "test":
+		return "Test 🧪"
+	default:
+		return mode
+	}
+}
+
 func formatChallengeMenu(bot *telego.Bot, chatID int64, match *Match) {
-	text := fmt.Sprintf("🎮 %s quer um desafio!\nFormato: %s",
-		displayLink(match.Challenger), match.formatLabel())
+	text := fmt.Sprintf("🎮 %s quer um desafio!\n%s | %s",
+		displayLink(match.Challenger), match.formatLabel(), modeDisplayName(match.Mode))
 
 	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
 		ChatID:    telego.ChatID{ID: chatID},
@@ -75,13 +95,23 @@ func formatConfigMenu(bot *telego.Bot, chatID int64, match *Match) {
 	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
 		ChatID:    telego.ChatID{ID: chatID},
 		MessageID: match.MessageID,
-		Text:      "Selecione o formato:",
+		Text: fmt.Sprintf("Selecione o formato e o modo:\n\nFormato: %s\nModo: %s",
+			match.formatLabel(), modeDisplayName(match.Mode)),
+		ParseMode: telego.ModeHTML,
 		ReplyMarkup: &telego.InlineKeyboardMarkup{
 			InlineKeyboard: [][]telego.InlineKeyboardButton{
 				{
 					{Text: "MD1", CallbackData: "challenge_md1"},
 					{Text: "MD3", CallbackData: "challenge_md3"},
 					{Text: "MD5", CallbackData: "challenge_md5"},
+				},
+				{
+					{Text: "🎻 Classic", CallbackData: "challenge_mode_classic"},
+					{Text: "🚀 Fast", CallbackData: "challenge_mode_fast"},
+				},
+				{
+					{Text: "🐉 Wild", CallbackData: "challenge_mode_wild"},
+					{Text: "🏠 Caseiro", CallbackData: "challenge_mode_caseiro"},
 				},
 			},
 		},
@@ -92,8 +122,8 @@ func formatConfigMenu(bot *telego.Bot, chatID int64, match *Match) {
 }
 
 func sendMatchAccepted(bot *telego.Bot, match *Match) {
-	text := fmt.Sprintf("✅ %s aceitou o %s contra %s!\nPlacar: 0×0\n\nPreparar partida 1?",
-		displayLink(match.Challenged), match.formatLabel(), displayLink(match.Challenger))
+	text := fmt.Sprintf("✅ %s aceitou o %s | %s contra %s!\nPlacar: 0×0\n\nPreparar partida 1?",
+		displayLink(match.Challenged), match.formatLabel(), modeDisplayName(match.Mode), displayLink(match.Challenger))
 
 	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
 		ChatID:    telego.ChatID{ID: match.ChatID},
@@ -116,38 +146,36 @@ func sendMatchAccepted(bot *telego.Bot, match *Match) {
 
 func sendMatchScore(bot *telego.Bot, match *Match) {
 	var text string
-	var editParams *telego.EditMessageTextParams
-
 	if match.winner != nil {
 		text = fmt.Sprintf("🏆 %s venceu o %s!\nPlacar final: %d×%d",
-			displayName(match.winner), match.formatLabel(), match.Wins1, match.Wins2)
-		editParams = &telego.EditMessageTextParams{
-			ChatID:    telego.ChatID{ID: match.ChatID},
-			MessageID: match.MessageID,
-			Text:      text,
-		}
+			displayLink(match.winner), match.formatLabel(), match.Wins1, match.Wins2)
 	} else {
-		p1Name := displayName(match.Challenger)
-		p2Name := displayName(match.Challenged)
+		p1Name := displayLink(match.Challenger)
+		p2Name := displayLink(match.Challenged)
 		total := match.Wins1 + match.Wins2 + 1
 		text = fmt.Sprintf("%s %d × %d %s\n\nPreparar partida %d?",
 			p1Name, match.Wins1, match.Wins2, p2Name, total)
-		editParams = &telego.EditMessageTextParams{
-			ChatID:    telego.ChatID{ID: match.ChatID},
-			MessageID: match.MessageID,
-			Text:      text,
-			ReplyMarkup: &telego.InlineKeyboardMarkup{
-				InlineKeyboard: [][]telego.InlineKeyboardButton{
-					{
-						{Text: "▶️ Próxima partida", CallbackData: "match_next"},
-						{Text: "❌ Cancelar", CallbackData: "match_cancel"},
-					},
-				},
+	}
+
+	var keyboard [][]telego.InlineKeyboardButton
+	if match.winner == nil {
+		keyboard = [][]telego.InlineKeyboardButton{
+			{
+				{Text: "▶️ Próxima partida", CallbackData: "match_next"},
+				{Text: "❌ Cancelar", CallbackData: "match_cancel"},
 			},
 		}
 	}
 
-	_, err := bot.EditMessageText(botCtx, editParams)
+	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+		ChatID:    telego.ChatID{ID: match.ChatID},
+		MessageID: match.MessageID,
+		Text:      text,
+		ParseMode: telego.ModeHTML,
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: keyboard,
+		},
+	})
 	if err != nil {
 		log.Printf("Erro ao editar mensagem de placar: %v", err)
 	}

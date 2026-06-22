@@ -51,7 +51,7 @@ func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
 		rankingStore.RecordWin(player.User, chatID)
 
 		err := gm.LeaveGame(player.User, chatID)
-		if err == ErrNotEnoughPlayers {
+		if err == ErrLastPlayerWin || err == ErrNotEnoughPlayers {
 			game.Started = false
 			sendMessage(bot, chatID, "Jogo encerrado!")
 			gm.EndGameByGame(chatID, game)
@@ -98,7 +98,18 @@ func doSkip(bot *telego.Bot, player *Player) {
 		game.Turn()
 	} else {
 		err := gm.LeaveGame(skippedPlayer.User, chatID)
-		if err == ErrNotEnoughPlayers {
+		if err == ErrLastPlayerWin {
+			game.Started = false
+			sendMessage(bot, chatID, fmt.Sprintf(
+				"%s ficou sem tempo e foi removido!", displayLink(skippedPlayer.User)))
+			remaining := game.Players()
+			if len(remaining) == 1 {
+				msgID := sendMessage(bot, chatID, fmt.Sprintf(
+					"%s venceu! Último jogador restante.", displayLink(remaining[0].User)))
+				reactMessage(bot, chatID, msgID, "🎉")
+			}
+			gm.EndGameByGame(chatID, game)
+		} else if err == ErrNotEnoughPlayers {
 			game.Started = false
 		sendMessage(bot, chatID, fmt.Sprintf(
 			"%s ficou sem tempo e foi removido!\nJogo encerrado.",
