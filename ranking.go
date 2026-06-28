@@ -14,6 +14,13 @@ type WinCount struct {
 	Wins      int
 }
 
+type UserGroupRank struct {
+	ChatID    int64
+	GroupName string
+	Wins      int
+	Rank      int
+}
+
 type RankingStore struct {
 	db *sql.DB
 }
@@ -53,6 +60,7 @@ func (rs *RankingStore) init() {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_wins_chat_created ON wins (chat_id, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_wins_user ON wins (user_id)`,
 		`CREATE TABLE IF NOT EXISTS challenge_wins (
 			id BIGSERIAL PRIMARY KEY,
 			user_id BIGINT NOT NULL,
@@ -73,18 +81,44 @@ func (rs *RankingStore) init() {
 			UNIQUE(chat_id, player1_id, player2_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_headtohead_chat ON challenge_headtohead (chat_id)`,
+		`CREATE TABLE IF NOT EXISTS group_settings (
+			chat_id BIGINT PRIMARY KEY,
+			default_mode TEXT NOT NULL DEFAULT 'fast',
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 	}
 	for _, q := range queries {
 		if _, err := rs.db.Exec(q); err != nil {
 			log.Printf("Erro ao executar query de init: %v", err)
 		}
 	}
+
+	// Migrations para tabelas existentes
+	rs.migrate()
 }
 
-func (rs *RankingStore) RecordWin(user *UserData, chatID int64) {
+func (rs *RankingStore) migrate() {
+	// Adicionar coluna group_name se não existir
+	var exists bool
+	err := rs.db.QueryRow(
+		`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'wins' AND column_name = 'group_name'
+		)`).Scan(&exists)
+	if err == nil && !exists {
+		_, err = rs.db.Exec(`ALTER TABLE wins ADD COLUMN group_name TEXT NOT NULL DEFAULT ''`)
+		if err != nil {
+			log.Printf("Erro ao adicionar coluna group_name: %v", err)
+		} else {
+			log.Println("Migration: coluna group_name adicionada à tabela wins")
+		}
+	}
+}
+
+func (rs *RankingStore) RecordWin(user *UserData, chatID int64, groupName string) {
 	_, err := rs.db.Exec(
-		`INSERT INTO wins (user_id, first_name, username, chat_id, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-		user.ID, user.FirstName, user.Username, chatID,
+		`INSERT INTO wins (user_id, first_name, username, chat_id, group_name, created_at) VALUES ($1, $2, $3, $4, $5, NOW())`,
+		user.ID, user.FirstName, user.Username, chatID, groupName,
 	)
 	if err != nil {
 		log.Printf("Erro ao registrar vitória: %v", err)
@@ -231,4 +265,95 @@ func (rs *RankingStore) GetRanking(chatID int64, period string) []WinCount {
 	}
 
 	return result
+}
+
+func (rs *RankingStore) GetGroupDefaultMode(chatID int64) string {
+	var mode string
+	err := rs.db.QueryRow(
+		`SELECT default_mode FROM group_settings WHERE chat_id = $1`,
+		chatID,
+	).Scan(&mode)
+	if err != nil {
+		return GetDefaultGamemode()
+	}
+	return mode
+}
+
+func (rs *RankingStore) SetGroupDefaultMode(chatID int64, mode string) {
+	_, err := rs.db.Exec(
+		`INSERT INTO group_settings (chat_id, default_mode, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (chat_id)
+		DO UPDATE SET default_mode = EXCLUDED.default_mode, updated_at = NOW()`,
+		chatID, mode,
+	)
+	if err != nil {
+		log.Printf("Erro ao salvar modo do grupo: %v", err)
+	}
+}
+
+func (rs *RankingStore) GetUserRankingAcrossGroups(userID int64) []UserGroupRank {
+	rows, err := rs.db.Query(
+		`SELECT chat_id, group_name, COUNT(*) as wins
+		FROM wins
+		WHERE user_id = $1
+		GROUP BY chat_id, group_name
+		ORDER BY wins DESC`,
+		userID,
+	)
+	if err != nil {
+		log.Printf("Erro ao consultar ranking do usuário: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var result []UserGroupRank
+	for rows.Next() {
+		var r UserGroupRank
+		if err := rows.Scan(&r.ChatID, &r.GroupName, &r.Wins); err != nil {
+			log.Printf("Erro ao ler linha do ranking: %v", err)
+			continue
+		}
+		result = append(result, r)
+	}
+
+	// Calcular posição de cada grupo
+	for i := range result {
+		var rank int
+		err := rs.db.QueryRow(
+			`SELECT COUNT(DISTINCT user_id) + 1
+			FROM wins
+			WHERE chat_id = $1
+			AND user_id != $2
+			AND (SELECT COUNT(*) FROM wins w2 WHERE w2.chat_id = $1 AND w2.user_id = wins.user_id) >= $3`,
+			result[i].ChatID, userID, result[i].Wins,
+		).Scan(&rank)
+		if err != nil {
+			rank = 1
+		}
+		result[i].Rank = rank
+	}
+
+	return result
+}
+
+func (rs *RankingStore) CleanGroupData(chatID int64) {
+	var errs []error
+	if _, err := rs.db.Exec("DELETE FROM wins WHERE chat_id = $1", chatID); err != nil {
+		errs = append(errs, err)
+	}
+	if _, err := rs.db.Exec("DELETE FROM challenge_wins WHERE chat_id = $1", chatID); err != nil {
+		errs = append(errs, err)
+	}
+	if _, err := rs.db.Exec("DELETE FROM challenge_headtohead WHERE chat_id = $1", chatID); err != nil {
+		errs = append(errs, err)
+	}
+	if _, err := rs.db.Exec("DELETE FROM group_settings WHERE chat_id = $1", chatID); err != nil {
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		log.Printf("Erro ao limpar dados do grupo %d: %v", chatID, errs)
+	} else {
+		log.Printf("Dados do grupo %d limpos", chatID)
+	}
 }

@@ -48,12 +48,13 @@ func doPlayCard(bot *telego.Bot, player *Player, resultID string) {
 			return
 		}
 
-		rankingStore.RecordWin(player.User, chatID)
+		rankingStore.RecordWin(player.User, chatID, game.GroupName)
 
 		err := gm.LeaveGame(player.User, chatID)
 		if err == ErrLastPlayerWin || err == ErrNotEnoughPlayers {
 			game.Started = false
 			sendMessage(bot, chatID, "Jogo encerrado!")
+			showDailyRanking(bot, chatID)
 			gm.EndGameByGame(chatID, game)
 		}
 	}
@@ -169,7 +170,7 @@ func reactMessage(bot *telego.Bot, chatID int64, messageID int, emoji string) {
 	if messageID == 0 {
 		return
 	}
-	err := bot.SetMessageReaction(botCtx, &telego.SetMessageReactionParams{
+	_ = bot.SetMessageReaction(botCtx, &telego.SetMessageReactionParams{
 		ChatID:    telego.ChatID{ID: chatID},
 		MessageID: messageID,
 		Reaction: []telego.ReactionType{
@@ -179,9 +180,6 @@ func reactMessage(bot *telego.Bot, chatID int64, messageID int, emoji string) {
 			},
 		},
 	})
-	if err != nil {
-		log.Printf("Error setting reaction: %v", err)
-	}
 }
 
 func sendSticker(bot *telego.Bot, chatID int64, fileID string) {

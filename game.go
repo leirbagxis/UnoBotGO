@@ -8,6 +8,7 @@ import (
 type Game struct {
 	mu            sync.Mutex
 	ChatID        int64
+	GroupName     string
 	Deck          *Deck
 	LastCard      *Card
 	CurrentPlayer *Player
@@ -23,13 +24,18 @@ type Game struct {
 	MatchID       int64
 }
 
-func NewGame(chatID int64) *Game {
+func NewGame(chatID int64, groupName string) *Game {
+	mode := GetDefaultGamemode()
+	if rankingStore != nil {
+		mode = rankingStore.GetGroupDefaultMode(chatID)
+	}
 	return &Game{
-		ChatID: chatID,
-		Deck:   NewDeck(),
-		Open:   true,
-		Mode:   GetDefaultGamemode(),
-		Owner:  make([]int64, 0),
+		ChatID:    chatID,
+		GroupName: groupName,
+		Deck:      NewDeck(),
+		Open:      true,
+		Mode:      mode,
+		Owner:     make([]int64, 0),
 	}
 }
 

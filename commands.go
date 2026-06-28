@@ -4,9 +4,41 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/mymmrac/telego"
+)
+
+// Callback data constants
+const (
+	cbChallengeAccept     = "challenge_accept"
+	cbChallengeConfig     = "challenge_config"
+	cbChallengeMD1        = "challenge_md1"
+	cbChallengeMD3        = "challenge_md3"
+	cbChallengeMD5        = "challenge_md5"
+	cbChallengeModeClassic = "challenge_mode_classic"
+	cbChallengeModeFast   = "challenge_mode_fast"
+	cbChallengeModeWild   = "challenge_mode_wild"
+	cbChallengeModeCaseiro = "challenge_mode_caseiro"
+	cbChallengeModeTest   = "challenge_mode_test"
+	cbMatchStart          = "match_start"
+	cbMatchNext           = "match_next"
+	cbMatchCancel         = "match_cancel"
+
+	cbSetModeClassic = "set_mode_classic"
+	cbSetModeFast    = "set_mode_fast"
+	cbSetModeWild    = "set_mode_wild"
+	cbSetModeText    = "set_mode_text"
+	cbSetModeCaseiro = "set_mode_caseiro"
+
+	cbInfoHelp      = "info_help"
+	cbInfoModes     = "info_modes"
+	cbInfoRanking   = "info_ranking"
+	cbInfoRankingX1 = "info_rankingx1"
+	cbInfoBack      = "info_back"
+
+	cbRankingDiario  = "ranking_diario"
+	cbRankingSemanal = "ranking_semanal"
+	cbRankingMensal  = "ranking_mensal"
 )
 
 func handleMessage(bot *telego.Bot, message telego.Message) {
@@ -51,6 +83,8 @@ func handleMessage(bot *telego.Bot, message telego.Message) {
 		cmdJoinGame(bot, message, user, chatID)
 	case "/start":
 		cmdStartGame(bot, message, user, chatID)
+	case "/iniciar":
+		cmdStartGame(bot, message, user, chatID)
 	case "/sair":
 		cmdLeaveGame(bot, message, user, chatID)
 	case "/kill":
@@ -70,7 +104,7 @@ func handleMessage(bot *telego.Bot, message telego.Message) {
 	case "/ajuda":
 		cmdHelp(bot, message, chatID)
 	case "/ranking":
-		cmdRanking(bot, message, chatID)
+		cmdRanking(bot, message, user, chatID)
 	case "/diario":
 		cmdRankingDiario(bot, message, chatID)
 	case "/semanal":
@@ -79,658 +113,10 @@ func handleMessage(bot *telego.Bot, message telego.Message) {
 		cmdDesafio(bot, message, user, chatID)
 	case "/modos":
 		cmdModes(bot, message, chatID)
+	case "/modo":
+		cmdModo(bot, message, chatID)
 	case "/rankingx1":
 		cmdRankingX1(bot, message, user, chatID)
-	}
-}
-
-func cmdNewGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	if msg.Chat.Type != telego.ChatTypeGroup && msg.Chat.Type != telego.ChatTypeSupergroup {
-		sendMessage(bot, chatID, "Use este comando em um grupo.")
-		return
-	}
-
-	game := gm.NewGame(chatID)
-	if game == nil {
-		sendMessage(bot, chatID, "Já existe um desafio ativo neste grupo!")
-		return
-	}
-	if game.Started {
-		sendMessage(bot, chatID, "Já existe um jogo em andamento neste grupo!")
-		return
-	}
-	game.Starter = user
-	game.Owner = []int64{user.ID}
-
-	sendMessage(bot, chatID, "Novo jogo criado! Entre com /entrar e inicie com /start")
-}
-
-func cmdJoinGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	if msg.Chat.Type != telego.ChatTypeGroup && msg.Chat.Type != telego.ChatTypeSupergroup {
-		sendMessage(bot, chatID, "Use este comando em um grupo.")
-		return
-	}
-
-	err := gm.JoinGame(user, chatID)
-	switch err {
-	case nil:
-		sendMessage(bot, chatID, "Você entrou no jogo!")
-	case ErrLobbyClosed:
-		sendMessage(bot, chatID, "O lobby está fechado.")
-	case ErrNoGameInChat:
-		sendMessage(bot, chatID, "Nenhum jogo ativo. Crie um com /novo")
-	case ErrAlreadyJoined:
-		sendMessage(bot, chatID, "Você já está no jogo.")
-	case ErrDeckEmpty:
-		sendMessage(bot, chatID, "Não há cartas suficientes no baralho.")
-	default:
-		log.Printf("Error joining game: %v", err)
-	}
-}
-
-func cmdStartGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	if msg.Chat.Type == telego.ChatTypePrivate {
-		text := fmt.Sprintf(`<b>🎮 UnoBotGO</b>
-
-Bot para jogar UNO em grupos do Telegram.
-
-<b>Como usar:</b>
-1. Adicione o bot a um grupo
-2. No grupo, use /novo para criar um jogo
-3. Jogadores entram com /entrar
-4. Inicie com /start
-5. Digite <code>@%s</code> na mensagem para ver suas cartas
-
-<b>Comandos principais:</b>
-/novo - Criar novo jogo
-/entrar - Entrar no jogo
-/start - Iniciar o jogo
-/ajuda - Lista completa
-/ranking - Rankings`, botUsername)
-
-		sendMessage(bot, chatID, text)
-		return
-	}
-
-	games := gm.ChatIDGames[chatID]
-	if len(games) == 0 {
-		sendMessage(bot, chatID, "Nenhum jogo ativo. Crie um com /novo")
-		return
-	}
-	game := games[len(games)-1]
-
-	if game.Started {
-		sendMessage(bot, chatID, "O jogo já foi iniciado.")
-		return
-	}
-
-	if len(game.Players()) < GetMinPlayers() {
-		sendMessage(bot, chatID, fmt.Sprintf("Pelo menos %d jogadores devem entrar no jogo.", GetMinPlayers()))
-		return
-	}
-
-	game.Start()
-	gm.UpdateCurrentPlayer(game)
-	for _, player := range game.Players() {
-		player.DrawFirstHand()
-	}
-
-	if game.LastCard != nil {
-		sendSticker(bot, chatID, Stickers[game.LastCard.String()])
-	}
-
-	firstMsg := fmt.Sprintf(
-		"Primeiro jogador: %s\nUse /fechar para impedir que mais pessoas entrem.",
-		displayLink(game.CurrentPlayer.User))
-	sendNextMessage(bot, chatID, firstMsg)
-	startPlayerCountdown(bot, game)
-}
-
-func cmdLeaveGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	player := gm.PlayerForUserInChat(user, chatID)
-	if player == nil {
-		sendMessage(bot, chatID, "Você não está em nenhum jogo neste grupo.")
-		return
-	}
-	game := player.Game
-
-	if game.MatchID != 0 {
-		sendMessage(bot, chatID, "Você não pode sair de um desafio. Use o botão Cancelar na mensagem do desafio.")
-		return
-	}
-
-	err := gm.LeaveGame(user, chatID)
-	switch err {
-	case nil:
-		if game.Started {
-			gm.UpdateCurrentPlayer(game)
-			sendNextMessage(bot, chatID, fmt.Sprintf("OK. Próximo jogador: %s", displayLink(game.CurrentPlayer.User)))
-		} else {
-			sendMessage(bot, chatID, fmt.Sprintf("%s saiu do jogo.", displayLink(user)))
-		}
-	case ErrNoGameInChat:
-		sendMessage(bot, chatID, "Você não está em nenhum jogo neste grupo.")
-	case ErrLastPlayerWin:
-		game.Started = false
-		remaining := game.Players()
-		if len(remaining) == 1 {
-			msgID := sendMessage(bot, chatID, fmt.Sprintf("%s venceu! Último jogador restante.", displayLink(remaining[0].User)))
-			reactMessage(bot, chatID, msgID, "🎉")
-			rankingStore.RecordWin(remaining[0].User, chatID)
-		}
-		gm.EndGameByGame(chatID, game)
-	case ErrNotEnoughPlayers:
-		game.Started = false
-		gm.EndGameByGame(chatID, game)
-		sendMessage(bot, chatID, "Jogo encerrado!")
-	default:
-		log.Printf("Error leaving game: %v", err)
-	}
-}
-
-func cmdKillGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	if msg.Chat.Type == telego.ChatTypePrivate {
-		cmdHelp(bot, msg, chatID)
-		return
-	}
-
-	match := gm.GetMatch(chatID)
-	if match != nil {
-		gm.CancelMatch(chatID)
-		sendMessage(bot, chatID, "Desafio cancelado!")
-		return
-	}
-
-	games := gm.ChatIDGames[chatID]
-	if len(games) == 0 {
-		sendMessage(bot, chatID, "Nenhum jogo ativo neste chat.")
-		return
-	}
-	game := games[len(games)-1]
-
-	if user.ID != game.Starter.ID && !isAdmin(user.ID) {
-		sendMessage(bot, chatID, fmt.Sprintf("Apenas o criador do jogo (%s) pode fazer isso.", game.Starter.FirstName))
-		return
-	}
-
-	err := gm.EndGame(chatID, user)
-	if err != nil {
-		sendMessage(bot, chatID, "O jogo ainda não foi iniciado. Use /entrar e /start")
-	} else {
-		game.Started = false
-		sendMessage(bot, chatID, "Jogo encerrado!")
-	}
-}
-
-func cmdCloseGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	games := gm.ChatIDGames[chatID]
-	if len(games) == 0 {
-		sendMessage(bot, chatID, "Nenhum jogo ativo neste chat.")
-		return
-	}
-	game := games[len(games)-1]
-
-	if user.ID != game.Starter.ID && !isAdmin(user.ID) {
-		sendMessage(bot, chatID, fmt.Sprintf("Apenas o criador do jogo (%s) pode fazer isso.", game.Starter.FirstName))
-		return
-	}
-
-	game.Open = false
-	sendMessage(bot, chatID, "Lobby fechado. Ninguém mais pode entrar.")
-}
-
-func cmdOpenGame(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	games := gm.ChatIDGames[chatID]
-	if len(games) == 0 {
-		sendMessage(bot, chatID, "Nenhum jogo ativo neste chat.")
-		return
-	}
-	game := games[len(games)-1]
-
-	if user.ID != game.Starter.ID && !isAdmin(user.ID) {
-		sendMessage(bot, chatID, fmt.Sprintf("Apenas o criador do jogo (%s) pode fazer isso.", game.Starter.FirstName))
-		return
-	}
-
-	game.Open = true
-	sendMessage(bot, chatID, "Lobby aberto. Novos jogadores podem /entrar")
-}
-
-func cmdSkipPlayer(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	player := gm.PlayerForUserInChat(user, chatID)
-	if player == nil {
-		sendMessage(bot, chatID, "Você não está em nenhum jogo neste grupo.")
-		return
-	}
-
-	game := player.Game
-	skippedPlayer := game.CurrentPlayer
-	delta := timeSince(skippedPlayer.TurnStarted)
-
-	if delta < skippedPlayer.WaitingTime && player != skippedPlayer {
-		n := skippedPlayer.WaitingTime - delta
-		sendMessage(bot, chatID, fmt.Sprintf("Aguarde %d segundos.", n))
-		return
-	}
-
-	doSkip(bot, player)
-	if game.Started && game.CurrentPlayer != nil {
-		sendNextMessage(bot, chatID, fmt.Sprintf("Próximo jogador: %s", displayLink(game.CurrentPlayer.User)))
-	}
-}
-
-func timeSince(t time.Time) int {
-	return int(time.Since(t).Seconds())
-}
-
-func cmdKickPlayer(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	if msg.Chat.Type == telego.ChatTypePrivate {
-		cmdHelp(bot, msg, chatID)
-		return
-	}
-
-	games := gm.ChatIDGames[chatID]
-	if len(games) == 0 {
-		sendMessage(bot, chatID, "Nenhum jogo ativo neste chat.")
-		return
-	}
-	game := games[len(games)-1]
-
-	if !game.Started {
-		sendMessage(bot, chatID, "O jogo ainda não começou.")
-		return
-	}
-
-	if user.ID != game.Starter.ID && !isAdmin(user.ID) {
-		sendMessage(bot, chatID, fmt.Sprintf("Apenas o criador do jogo (%s) pode fazer isso.", game.Starter.FirstName))
-		return
-	}
-
-	if msg.ReplyToMessage == nil {
-		sendMessage(bot, chatID, "Responda a mensagem de quem você quer expulsar.")
-		return
-	}
-
-	kicked := &UserData{
-		ID:        msg.ReplyToMessage.From.ID,
-		FirstName: msg.ReplyToMessage.From.FirstName,
-		Username:  msg.ReplyToMessage.From.Username,
-	}
-
-		if game.MatchID != 0 {
-		sendMessage(bot, chatID, "Você não pode expulsar alguém de um desafio.")
-		return
-	}
-
-		err := gm.LeaveGame(kicked, chatID)
-	if err == ErrLastPlayerWin {
-		kickedPlayer := gm.PlayerForUserInChat(kicked, chatID)
-		if kickedPlayer != nil {
-			kickedPlayer.Game.Started = false
-		}
-		remaining := game.Players()
-		if len(remaining) == 1 {
-			sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayLink(kicked), displayLink(user)))
-			msgID := sendMessage(bot, chatID, fmt.Sprintf("%s venceu! Último jogador restante.", displayLink(remaining[0].User)))
-			reactMessage(bot, chatID, msgID, "🎉")
-			rankingStore.RecordWin(remaining[0].User, chatID)
-		}
-		gm.EndGameByGame(chatID, game)
-		return
-	} else if err == ErrNotEnoughPlayers {
-		kickedPlayer := gm.PlayerForUserInChat(kicked, chatID)
-		if kickedPlayer != nil {
-			kickedPlayer.Game.Started = false
-			gm.EndGameByGame(chatID, kickedPlayer.Game)
-		}
-		sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayLink(kicked), displayLink(user)))
-		sendMessage(bot, chatID, "Jogo encerrado!")
-		return
-	} else if err != nil {
-		sendMessage(bot, chatID, fmt.Sprintf("Jogador %s não encontrado.", displayLink(kicked)))
-		return
-	}
-
-	sendMessage(bot, chatID, fmt.Sprintf("%s foi expulso por %s", displayLink(kicked), displayLink(user)))
-	if game.Started && game.CurrentPlayer != nil {
-		sendNextMessage(bot, chatID, fmt.Sprintf("Próximo jogador: %s", displayLink(game.CurrentPlayer.User)))
-	}
-}
-
-func cmdCleanGames(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	if msg.Chat.Type == telego.ChatTypePrivate {
-		sendMessage(bot, chatID, "Use este comando em um grupo.")
-		return
-	}
-
-	match := gm.GetMatch(chatID)
-	if match != nil {
-		gm.CancelMatch(chatID)
-		sendMessage(bot, chatID, "Desafio cancelado!")
-		return
-	}
-
-	gm.Lock()
-	games := gm.ChatIDGames[chatID]
-	gm.Unlock()
-
-	if len(games) == 0 {
-		sendMessage(bot, chatID, "Nenhum jogo para limpar.")
-		return
-	}
-
-	removed, err := gm.CleanGames(chatID)
-	if err != nil {
-		log.Printf("Error cleaning games: %v", err)
-		return
-	}
-
-	if removed == 0 {
-		sendMessage(bot, chatID, "Nenhum jogo não iniciado para limpar.")
-		return
-	}
-
-	sendMessage(bot, chatID, fmt.Sprintf("Limpou %d jogo(s) não iniciado(s).", removed))
-}
-
-func cmdNotifyMe(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	if msg.Chat.Type == telego.ChatTypePrivate {
-		sendMessage(bot, chatID, "Use este comando em um grupo para ser notificado quando um novo jogo começar.")
-		return
-	}
-
-	if gm.RemindDict[chatID] == nil {
-		gm.RemindDict[chatID] = make(map[int64]bool)
-	}
-	gm.RemindDict[chatID][user.ID] = true
-	sendMessage(bot, chatID, "Você será notificado quando um novo jogo começar.")
-}
-
-func cmdHelp(bot *telego.Bot, msg telego.Message, chatID int64) {
-	helpText := `Siga estes passos:
-
-1. Adicione este bot a um grupo
-2. No grupo, crie um novo jogo com /novo ou entre em um jogo com /entrar
-3. Após pelo menos 2 jogadores, inicie com /start
-4. Digite @ na janela de mensagens e veja suas cartas
-
-Comandos:
-/novo - Criar novo jogo
-/entrar - Entrar no jogo
-/start - Iniciar o jogo
-/sair - Sair do jogo
-/fechar - Fechar lobby
-/abrir - Abrir lobby
-/kill - Encerrar jogo
-/pular - Pular jogador atual
-/kick - Expulsar jogador
-/limpar - Limpar jogos não iniciados
-/notificar - Notificar quando novo jogo começar
-/ajuda - Esta ajuda
-/modos - Modos de jogo
-/desafio - Desafiar alguém para um MD1/MD3/MD5
-/ranking - Ranking mensal
-/diario - Ranking diário
-/semanal - Ranking semanal`
-	sendMessage(bot, chatID, helpText)
-}
-
-func cmdModes(bot *telego.Bot, msg telego.Message, chatID int64) {
-	text := `<b>🎮 Modos de jogo:</b>
-
-🎻 <b>Classic</b> — UNO padrão. Sem auto-skip.
-🚀 <b>Sanic</b> — UNO padrão. Jogador que demora é pulado automaticamente.
-🐉 <b>Wild</b> — Mais cartas especiais (+4 e Choose), menos números.
-✍️ <b>Text</b> — UNO padrão. Apenas texto, sem stickers.
-🏠 <b>Caseiro</b> — +2 pode ser rebatido por +4; após +4 só +2 da cor escolhida.
-🧪 <b>Test</b> — Cartas específicas (+4, +2, Reverse). Regras Caseiro. Apenas para teste.
-
-O criador do jogo pode mudar o modo digitando @ no grupo antes de iniciar.`
-	sendMessage(bot, chatID, text)
-}
-
-func cmdRanking(bot *telego.Bot, msg telego.Message, chatID int64) {
-	ranking := rankingStore.GetRanking(chatID, "mensal")
-	text := formatRankingTexto("Mensal", ranking)
-
-	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID: telego.ChatID{ID: chatID},
-		Text:   text,
-		ReplyParameters: &telego.ReplyParameters{
-			MessageID: msg.MessageID,
-		},
-		ReplyMarkup: &telego.InlineKeyboardMarkup{
-			InlineKeyboard: [][]telego.InlineKeyboardButton{
-				{
-					{Text: "📅 Diário", CallbackData: "ranking_diario"},
-					{Text: "📆 Semanal", CallbackData: "ranking_semanal"},
-				},
-			},
-		},
-	})
-	if err != nil {
-		log.Printf("Erro ao enviar ranking: %v", err)
-	}
-}
-
-func cmdRankingDiario(bot *telego.Bot, msg telego.Message, chatID int64) {
-	ranking := rankingStore.GetRanking(chatID, "diario")
-	text := formatRankingTexto("Diário", ranking)
-
-	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID: telego.ChatID{ID: chatID},
-		Text:   text,
-		ReplyParameters: &telego.ReplyParameters{
-			MessageID: msg.MessageID,
-		},
-		ReplyMarkup: &telego.InlineKeyboardMarkup{
-			InlineKeyboard: [][]telego.InlineKeyboardButton{
-				{
-					{Text: "📅 Mensal", CallbackData: "ranking_mensal"},
-					{Text: "📆 Semanal", CallbackData: "ranking_semanal"},
-				},
-			},
-		},
-	})
-	if err != nil {
-		log.Printf("Erro ao enviar ranking: %v", err)
-	}
-}
-
-func cmdRankingSemanal(bot *telego.Bot, msg telego.Message, chatID int64) {
-	ranking := rankingStore.GetRanking(chatID, "semanal")
-	text := formatRankingTexto("Semanal", ranking)
-
-	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID: telego.ChatID{ID: chatID},
-		Text:   text,
-		ReplyParameters: &telego.ReplyParameters{
-			MessageID: msg.MessageID,
-		},
-		ReplyMarkup: &telego.InlineKeyboardMarkup{
-			InlineKeyboard: [][]telego.InlineKeyboardButton{
-				{
-					{Text: "📅 Diário", CallbackData: "ranking_diario"},
-					{Text: "📆 Mensal", CallbackData: "ranking_mensal"},
-				},
-			},
-		},
-	})
-	if err != nil {
-		log.Printf("Erro ao enviar ranking: %v", err)
-	}
-}
-
-func cmdDesafio(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	if msg.Chat.Type != telego.ChatTypeGroup && msg.Chat.Type != telego.ChatTypeSupergroup {
-		sendMessage(bot, chatID, "Use este comando em um grupo.")
-		return
-	}
-
-	match := gm.NewMatch(chatID, user)
-	if match == nil {
-		sendMessage(bot, chatID, "Já existe um jogo ou desafio ativo neste grupo.")
-		return
-	}
-
-	text := fmt.Sprintf("🎮 %s quer um desafio!\nFormato: %s",
-		displayLink(user), match.formatLabel())
-
-	sent, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID:    telego.ChatID{ID: chatID},
-		Text:      text,
-		ParseMode: telego.ModeHTML,
-		ReplyMarkup: &telego.InlineKeyboardMarkup{
-			InlineKeyboard: [][]telego.InlineKeyboardButton{
-				{
-					{Text: "✅ Aceitar", CallbackData: "challenge_accept"},
-					{Text: "⚙️ Configurar", CallbackData: "challenge_config"},
-				},
-			},
-		},
-	})
-	if err != nil {
-		log.Printf("Erro ao enviar desafio: %v", err)
-		gm.CancelMatch(chatID)
-		return
-	}
-
-	match.MessageID = sent.MessageID
-}
-
-func handleChallengeCallback(bot *telego.Bot, query telego.CallbackQuery, chatID int64, messageID int, user *UserData) {
-	match := gm.GetMatch(chatID)
-	if match == nil {
-		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-			Text:            "Desafio não encontrado ou já encerrado.",
-		})
-		return
-	}
-
-	switch query.Data {
-	case "challenge_config":
-		formatConfigMenu(bot, chatID, match)
-
-	case "challenge_md1":
-		match.BestOf = 1
-		match.TargetWins = 1
-		formatChallengeMenu(bot, chatID, match)
-
-	case "challenge_md3":
-		match.BestOf = 3
-		match.TargetWins = 2
-		formatChallengeMenu(bot, chatID, match)
-
-	case "challenge_md5":
-		match.BestOf = 5
-		match.TargetWins = 3
-		formatChallengeMenu(bot, chatID, match)
-
-	case "challenge_mode_classic":
-		match.Mode = "classic"
-		formatChallengeMenu(bot, chatID, match)
-
-	case "challenge_mode_fast":
-		match.Mode = "fast"
-		formatChallengeMenu(bot, chatID, match)
-
-	case "challenge_mode_wild":
-		match.Mode = "wild"
-		formatChallengeMenu(bot, chatID, match)
-
-	case "challenge_mode_caseiro":
-		match.Mode = "caseiro"
-		formatChallengeMenu(bot, chatID, match)
-
-	case "challenge_mode_test":
-		match.Mode = "test"
-		formatChallengeMenu(bot, chatID, match)
-
-	case "challenge_accept":
-		if user.ID == match.Challenger.ID {
-			_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
-				CallbackQueryID: query.ID,
-				Text:            "Você não pode aceitar seu próprio desafio!",
-			})
-			return
-		}
-		match.Challenged = user
-		match.State = MatchBetweenGames
-		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-		})
-		sendMatchAccepted(bot, match)
-
-	case "match_start":
-		if match.State != MatchBetweenGames || match.Challenged == nil {
-			return
-		}
-		if user.ID != match.Challenger.ID && user.ID != match.Challenged.ID {
-			_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
-				CallbackQueryID: query.ID,
-				Text:            "Apenas os jogadores do desafio podem iniciar.",
-			})
-			return
-		}
-		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-		})
-		gm.startMatchGame(bot, match)
-
-	case "match_next":
-		if match.State != MatchBetweenGames {
-			return
-		}
-		if user.ID != match.Challenger.ID && user.ID != match.Challenged.ID {
-			return
-		}
-		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-		})
-		gm.startMatchGame(bot, match)
-
-	case "match_cancel":
-		gm.CancelMatch(chatID)
-		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
-			CallbackQueryID: query.ID,
-		})
-		_, _ = bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
-			ChatID:    telego.ChatID{ID: chatID},
-			MessageID: messageID,
-			Text:      "Desafio cancelado.",
-		})
-	}
-}
-
-func cmdRankingX1(bot *telego.Bot, msg telego.Message, user *UserData, chatID int64) {
-	list := rankingStore.GetChallengeRanking(chatID, user.ID)
-
-	if len(list) == 0 {
-		sendMessage(bot, chatID, "Nenhum confronto registrado para você neste grupo.")
-		return
-	}
-
-	text := fmt.Sprintf("Confrontos de %s:\n\n", displayLink(user))
-	for _, h := range list {
-		opUser := &UserData{
-			ID:        h.OpponentID,
-			FirstName: h.OpponentName,
-			Username:  h.OpponentUsername,
-		}
-		text += fmt.Sprintf("vs %s — %dV %dD\n", displayLink(opUser), h.MyWins, h.MyLosses)
-	}
-
-	_, err := bot.SendMessage(botCtx, &telego.SendMessageParams{
-		ChatID:    telego.ChatID{ID: chatID},
-		Text:      text,
-		ParseMode: telego.ModeHTML,
-		ReplyParameters: &telego.ReplyParameters{
-			MessageID: msg.MessageID,
-		},
-	})
-	if err != nil {
-		log.Printf("Erro ao enviar ranking x1: %v", err)
 	}
 }
 
@@ -744,23 +130,156 @@ func handleCallbackQuery(bot *telego.Bot, query telego.CallbackQuery) {
 		Username:  query.From.Username,
 	}
 
-	switch data {
-	case "challenge_accept", "challenge_config", "challenge_md1", "challenge_md3", "challenge_md5",
-		"challenge_mode_classic", "challenge_mode_fast", "challenge_mode_wild", "challenge_mode_caseiro", "challenge_mode_test",
-		"match_start", "match_next", "match_cancel":
+	switch {
+	case isChallengeCallback(data):
 		handleChallengeCallback(bot, query, chatID, messageID, user)
+	case isModeCallback(data):
+		handleModeCallback(bot, query, chatID, messageID, data)
+	case isInfoCallback(data):
+		handleInfoCallback(bot, query, chatID, messageID, user, data)
+	case isRankingCallback(data):
+		handleRankingCallback(bot, query, chatID, messageID, data)
+	}
+}
+
+func isChallengeCallback(data string) bool {
+	switch data {
+	case cbChallengeAccept, cbChallengeConfig,
+		cbChallengeMD1, cbChallengeMD3, cbChallengeMD5,
+		cbChallengeModeClassic, cbChallengeModeFast, cbChallengeModeWild, cbChallengeModeCaseiro, cbChallengeModeTest,
+		cbMatchStart, cbMatchNext, cbMatchCancel:
+		return true
+	}
+	return false
+}
+
+func isModeCallback(data string) bool {
+	switch data {
+	case cbSetModeClassic, cbSetModeFast, cbSetModeWild, cbSetModeText, cbSetModeCaseiro:
+		return true
+	}
+	return false
+}
+
+func isInfoCallback(data string) bool {
+	switch data {
+	case cbInfoHelp, cbInfoModes, cbInfoRanking, cbInfoRankingX1, cbInfoBack:
+		return true
+	}
+	return false
+}
+
+func isRankingCallback(data string) bool {
+	switch data {
+	case cbRankingDiario, cbRankingSemanal, cbRankingMensal:
+		return true
+	}
+	return false
+}
+
+func handleModeCallback(bot *telego.Bot, query telego.CallbackQuery, chatID int64, messageID int, data string) {
+	modeMap := map[string]string{
+		cbSetModeClassic: "classic",
+		cbSetModeFast:    "fast",
+		cbSetModeWild:    "wild",
+		cbSetModeText:    "text",
+		cbSetModeCaseiro: "caseiro",
+	}
+	mode := modeMap[data]
+
+	rankingStore.SetGroupDefaultMode(chatID, mode)
+	_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	})
+
+	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		MessageID: messageID,
+		Text:      fmt.Sprintf("Modo definido para %s", modeDisplayName(mode)),
+	})
+	if err != nil {
+		log.Printf("Erro ao editar mensagem de modo: %v", err)
+	}
+}
+
+func handleInfoCallback(bot *telego.Bot, query telego.CallbackQuery, chatID int64, messageID int, user *UserData, data string) {
+	_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
+	})
+	reactMessage(bot, chatID, messageID, "👍")
+
+	switch data {
+	case cbInfoHelp:
+		editWithBack(bot, chatID, messageID, helpText(), "")
+	case cbInfoModes:
+		editWithBack(bot, chatID, messageID, modesText(), telego.ModeHTML)
+	case cbInfoRanking:
+		if query.Message.GetChat().Type == telego.ChatTypePrivate {
+			editUserRankingAcrossGroups(bot, chatID, messageID, user)
+		} else {
+			editRankingWithBack(bot, chatID, messageID, "mensal", "Mensal")
+		}
+	case cbInfoRankingX1:
+		editRankingX1WithBack(bot, chatID, messageID, user)
+	case cbInfoBack:
+		editStartMessage(bot, chatID, messageID)
+	}
+}
+
+func handleRankingCallback(bot *telego.Bot, query telego.CallbackQuery, chatID int64, messageID int, data string) {
+	user := &UserData{
+		ID:        query.From.ID,
+		FirstName: query.From.FirstName,
+		Username:  query.From.Username,
+	}
+
+	// No privado, mostra posição do usuário nos grupos
+	if query.Message.GetChat().Type == telego.ChatTypePrivate {
+		_ = bot.AnswerCallbackQuery(botCtx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+		})
+		rankings := rankingStore.GetUserRankingAcrossGroups(user.ID)
+		if len(rankings) == 0 {
+			_, _ = bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+				ChatID:    telego.ChatID{ID: chatID},
+				MessageID: messageID,
+				Text:      "Você ainda não venceu nenhum jogo.",
+			})
+			return
+		}
+
+		text := "🏆 Sua posição nos grupos:\n\n"
+		for _, r := range rankings {
+			name := r.GroupName
+			if name == "" {
+				name = fmt.Sprintf("Grupo %d", r.ChatID)
+			}
+			text += fmt.Sprintf("#%d — %s (%d vitórias)\n", r.Rank, name, r.Wins)
+		}
+
+		_, _ = bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+			ChatID:    telego.ChatID{ID: chatID},
+			MessageID: messageID,
+			Text:      text,
+			ReplyMarkup: &telego.InlineKeyboardMarkup{
+				InlineKeyboard: [][]telego.InlineKeyboardButton{
+					{{Text: "◀️ Voltar", CallbackData: cbInfoBack}},
+				},
+			},
+		})
 		return
 	}
 
+	// No grupo, mostra ranking do grupo
 	var periodo, periodoLabel string
-	switch query.Data {
-	case "ranking_diario":
+	switch data {
+	case cbRankingDiario:
 		periodo = "diario"
 		periodoLabel = "Diário"
-	case "ranking_semanal":
+	case cbRankingSemanal:
 		periodo = "semanal"
 		periodoLabel = "Semanal"
-	case "ranking_mensal":
+	case cbRankingMensal:
 		periodo = "mensal"
 		periodoLabel = "Mensal"
 	default:
@@ -775,22 +294,22 @@ func handleCallbackQuery(bot *telego.Bot, query telego.CallbackQuery) {
 	case "diario":
 		botoes = [][]telego.InlineKeyboardButton{
 			{
-				{Text: "📅 Mensal", CallbackData: "ranking_mensal"},
-				{Text: "📆 Semanal", CallbackData: "ranking_semanal"},
+				{Text: "📅 Mensal", CallbackData: cbRankingMensal},
+				{Text: "📆 Semanal", CallbackData: cbRankingSemanal},
 			},
 		}
 	case "semanal":
 		botoes = [][]telego.InlineKeyboardButton{
 			{
-				{Text: "📅 Diário", CallbackData: "ranking_diario"},
-				{Text: "📆 Mensal", CallbackData: "ranking_mensal"},
+				{Text: "📅 Diário", CallbackData: cbRankingDiario},
+				{Text: "📆 Mensal", CallbackData: cbRankingMensal},
 			},
 		}
 	default:
 		botoes = [][]telego.InlineKeyboardButton{
 			{
-				{Text: "📅 Diário", CallbackData: "ranking_diario"},
-				{Text: "📆 Semanal", CallbackData: "ranking_semanal"},
+				{Text: "📅 Diário", CallbackData: cbRankingDiario},
+				{Text: "📆 Semanal", CallbackData: cbRankingSemanal},
 			},
 		}
 	}
@@ -812,20 +331,152 @@ func handleCallbackQuery(bot *telego.Bot, query telego.CallbackQuery) {
 	})
 }
 
-func formatRankingTexto(periodo string, ranking []WinCount) string {
-	if len(ranking) == 0 {
-		return fmt.Sprintf("🏆 Ranking %s\n\nNenhuma vitória registrada neste período.", periodo)
+func editWithBack(bot *telego.Bot, chatID int64, messageID int, text string, parseMode string) {
+	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		MessageID: messageID,
+		Text:      text,
+		ParseMode: parseMode,
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{{Text: "◀️ Voltar", CallbackData: cbInfoBack}},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao editar mensagem: %v", err)
+	}
+}
+
+func editUserRankingAcrossGroups(bot *telego.Bot, chatID int64, messageID int, user *UserData) {
+	rankings := rankingStore.GetUserRankingAcrossGroups(user.ID)
+	if len(rankings) == 0 {
+		_, _ = bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+			ChatID:    telego.ChatID{ID: chatID},
+			MessageID: messageID,
+			Text:      "Você ainda não venceu nenhum jogo.",
+			ReplyMarkup: &telego.InlineKeyboardMarkup{
+				InlineKeyboard: [][]telego.InlineKeyboardButton{
+					{{Text: "◀️ Voltar", CallbackData: cbInfoBack}},
+				},
+			},
+		})
+		return
 	}
 
-	text := fmt.Sprintf("🏆 Ranking %s\n\n", periodo)
-	for i, r := range ranking {
-		nome := r.FirstName
-		if r.Username != "" {
-			nome = "@" + r.Username
+	text := "🏆 Sua posição nos grupos:\n\n"
+	for _, r := range rankings {
+		name := r.GroupName
+		if name == "" {
+			name = fmt.Sprintf("Grupo %d", r.ChatID)
 		}
-		text += fmt.Sprintf("%d. %s — %d vitórias\n", i+1, nome, r.Wins)
+		text += fmt.Sprintf("#%d — %s (%d vitórias)\n", r.Rank, name, r.Wins)
 	}
-	return text
+
+	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		MessageID: messageID,
+		Text:      text,
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{{Text: "◀️ Voltar", CallbackData: cbInfoBack}},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao editar mensagem de ranking: %v", err)
+	}
+}
+
+func editRankingWithBack(bot *telego.Bot, chatID int64, messageID int, periodo string, periodoLabel string) {
+	ranking := rankingStore.GetRanking(chatID, periodo)
+	text := formatRankingTexto(periodoLabel, ranking)
+
+	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		MessageID: messageID,
+		Text:      text,
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{
+					{Text: "📅 Diário", CallbackData: cbRankingDiario},
+					{Text: "📆 Semanal", CallbackData: cbRankingSemanal},
+				},
+				{{Text: "◀️ Voltar", CallbackData: cbInfoBack}},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao editar mensagem de ranking: %v", err)
+	}
+}
+
+func editRankingX1WithBack(bot *telego.Bot, chatID int64, messageID int, user *UserData) {
+	list := rankingStore.GetChallengeRanking(chatID, user.ID)
+	text := formatRankingX1Texto(user, list)
+
+	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		MessageID: messageID,
+		Text:      text,
+		ParseMode: telego.ModeHTML,
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{{Text: "◀️ Voltar", CallbackData: cbInfoBack}},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao editar mensagem de ranking x1: %v", err)
+	}
+}
+
+func editStartMessage(bot *telego.Bot, chatID int64, messageID int) {
+	_, err := bot.EditMessageText(botCtx, &telego.EditMessageTextParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		MessageID: messageID,
+		Text:      startText(),
+		ParseMode: telego.ModeHTML,
+		ReplyMarkup: &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{
+					{Text: "📋 Ajuda", CallbackData: cbInfoHelp},
+					{Text: "🎮 Modos", CallbackData: cbInfoModes},
+				},
+				{
+					{Text: "🏆 Ranking", CallbackData: cbInfoRanking},
+					{Text: "⚔️ Ranking X1", CallbackData: cbInfoRankingX1},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Printf("Erro ao editar mensagem inicial: %v", err)
+	}
+}
+
+func startText() string {
+	return fmt.Sprintf(`🎮 <b>UnoBotGO</b>
+
+Olá! Este bot é uma versão em desenvolvimento, inspirado no bot original @unopybot.
+
+<b>Como usar:</b>
+1. Adicione o bot a um grupo
+2. No grupo, use /novo para criar um jogo
+3. Jogadores entram com /entrar
+4. Inicie com /iniciar
+5. Digite <code>@%s</code> na mensagem para ver suas cartas
+
+Use /ajuda para ver a lista completa de comandos.`, botUsername)
+}
+
+func handleMyChatMember(bot *telego.Bot, myChatMember telego.ChatMemberUpdated) {
+	status := myChatMember.NewChatMember.MemberStatus()
+	if status == telego.MemberStatusLeft || status == telego.MemberStatusBanned {
+		chatID := myChatMember.Chat.ID
+		log.Printf("Bot removido do grupo %d, limpando dados...", chatID)
+		rankingStore.CleanGroupData(chatID)
+	}
 }
 
 func isAdmin(userID int64) bool {

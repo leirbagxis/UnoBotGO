@@ -31,7 +31,7 @@ func NewGameManager() *GameManager {
 func (gm *GameManager) Lock()   { gm.mu.Lock() }
 func (gm *GameManager) Unlock() { gm.mu.Unlock() }
 
-func (gm *GameManager) NewGame(chatID int64) *Game {
+func (gm *GameManager) NewGame(chatID int64, groupName string) *Game {
 	gm.Lock()
 	defer gm.Unlock()
 
@@ -49,47 +49,47 @@ func (gm *GameManager) NewGame(chatID int64) *Game {
 	}
 
 	log.Printf("Creating new game in chat %d", chatID)
-	game := NewGame(chatID)
+	game := NewGame(chatID, groupName)
 
 	gm.ChatIDGames[chatID] = append(gm.ChatIDGames[chatID], game)
 	return game
 }
 
-func (gm *GameManager) JoinGame(user *UserData, chatID int64) error {
+func (gm *GameManager) JoinGame(user *UserData, chatID int64) (*Player, error) {
 	gm.Lock()
 	defer gm.Unlock()
 
 	games := gm.ChatIDGames[chatID]
 	if len(games) == 0 {
-		return ErrNoGameInChat
+		return nil, ErrNoGameInChat
 	}
 	game := games[len(games)-1]
 	if !game.Open {
-		return ErrLobbyClosed
+		return nil, ErrLobbyClosed
 	}
 
 	players := gm.UserIDPlayers[user.ID]
 	for _, p := range players {
 		if p.Game.ChatID == chatID {
-			return ErrAlreadyJoined
+			return nil, ErrAlreadyJoined
 		}
 	}
 
 	err := gm.leaveGame(user, chatID)
 	if err != nil && err != ErrNoGameInChat {
-		return err
+		return nil, err
 	}
 
 	player := NewPlayer(game, user)
 	if game.Started {
 		if err := player.DrawFirstHand(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	gm.UserIDPlayers[user.ID] = append(gm.UserIDPlayers[user.ID], player)
 	gm.UserIDCurrent[user.ID] = player
-	return nil
+	return player, nil
 }
 
 func (gm *GameManager) LeaveGame(user *UserData, chatID int64) error {
@@ -255,7 +255,7 @@ func (gm *GameManager) CancelMatch(chatID int64) {
 func (gm *GameManager) startMatchGame(bot *telego.Bot, match *Match) {
 	gm.Lock()
 
-	game := NewGame(match.ChatID)
+	game := NewGame(match.ChatID, "")
 	game.MatchID = match.ID
 
 	u1 := match.Challenger

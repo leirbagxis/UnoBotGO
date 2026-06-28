@@ -53,7 +53,7 @@ func main() {
 		Commands: []telego.BotCommand{
 			{Command: "novo", Description: "Criar novo jogo"},
 			{Command: "entrar", Description: "Entrar no jogo"},
-			{Command: "start", Description: "Iniciar o jogo"},
+			{Command: "iniciar", Description: "Iniciar o jogo"},
 			{Command: "sair", Description: "Sair do jogo"},
 			{Command: "fechar", Description: "Fechar lobby"},
 			{Command: "abrir", Description: "Abrir lobby"},
@@ -64,6 +64,7 @@ func main() {
 			{Command: "notificar", Description: "Notificar quando novo jogo começar"},
 			{Command: "ajuda", Description: "Ajuda"},
 			{Command: "modos", Description: "Explicação dos modos de jogo"},
+			{Command: "modo", Description: "Definir modo padrão do grupo"},
 			{Command: "ranking", Description: "Ranking mensal"},
 			{Command: "diario", Description: "Ranking diário"},
 			{Command: "semanal", Description: "Ranking semanal"},
@@ -81,6 +82,7 @@ func main() {
 			"inline_query",
 			"chosen_inline_result",
 			"callback_query",
+			"my_chat_member",
 		},
 	})
 	if err != nil {
@@ -101,6 +103,9 @@ func main() {
 		}
 		if update.CallbackQuery != nil {
 			handleCallbackQuery(bot, *update.CallbackQuery)
+		}
+		if update.MyChatMember != nil {
+			handleMyChatMember(bot, *update.MyChatMember)
 		}
 	}
 }

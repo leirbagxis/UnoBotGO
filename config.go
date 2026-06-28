@@ -3,24 +3,7 @@ package main
 import (
 	"os"
 	"strconv"
-	"sync"
 )
-
-var configOnce sync.Once
-
-func loadConfig() {
-	configOnce.Do(func() {
-		_ = os.Getenv("TOKEN") // ensure initialization
-	})
-}
-
-func GetToken() string {
-	return os.Getenv("TOKEN")
-}
-
-func GetBotUsername() string {
-	return os.Getenv("BOT_USERNAME")
-}
 
 func GetWaitingTime() int {
 	return getEnvInt("WAITING_TIME", 120)

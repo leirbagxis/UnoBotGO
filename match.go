@@ -30,23 +30,11 @@ type Match struct {
 	MessageID     int
 	CurrentGame   *Game
 	winner        *UserData
-	configMessage bool
 }
 
 func (m *Match) formatLabel() string {
 	s := fmt.Sprintf("MD%d", m.BestOf)
 	return s
-}
-
-func (m *Match) winsNeeded() int {
-	return m.TargetWins
-}
-
-func (m *Match) winnerName() string {
-	if m.winner != nil {
-		return displayLink(m.winner)
-	}
-	return ""
 }
 
 func modeDisplayName(mode string) string {

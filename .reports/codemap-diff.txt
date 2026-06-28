@@ -1,0 +1,25 @@
+=== Codemap Diff Report ===
+Date: 2026-06-25T15:26:00-03:00
+
+Status: FIRST GENERATION
+
+Previous codemaps found: NONE
+Diff: 100% new content
+Approval: Not required (initial generation, no previous to compare)
+
+Files generated:
+  - codemaps/architecture.md     (NEW)
+  - codemaps/backend.md          (NEW)
+  - codemaps/frontend.md         (NEW)
+  - codemaps/data.md             (NEW)
+
+Codebase snapshot:
+  - Go files:     14
+  - Total structs: 11
+  - Total functions: 85
+  - External deps: 3 (telego, godotenv, lib/pq)
+  - Lines of Go:  ~3,180
+  - Database:     PostgreSQL 17 (2 tables)
+  - Packages:     single main package
+
+Next diff: will compare against these files on next generation.

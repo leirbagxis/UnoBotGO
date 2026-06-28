@@ -177,7 +177,7 @@ func addNotStarted(results *[]telego.InlineQueryResult) {
 		ID:    "nogame",
 		Title: "O jogo não foi iniciado",
 		InputMessageContent: &telego.InputTextMessageContent{
-			MessageText: "Inicie o jogo com /start",
+			MessageText: "Inicie o jogo com /iniciar",
 		},
 	})
 }
